@@ -44,26 +44,24 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # better-sqlite3@12.11.1 only publishes prebuilt binaries for Node ABI
+      # 127 (Node 22+), not ABI 115 (Node 20) — confirmed directly by probing
+      # its GitHub release assets. On Node 20, npm has no prebuilt to fetch
+      # and falls back to compiling from source via node-gyp, which crashes
+      # on windows-latest specifically: node-gyp's Visual Studio detection
+      # can't parse the preview VS2026 (v18) install these runners now ship
+      # alongside the stable VS2022 one (confirmed live, a still-open
+      # upstream bug: nodejs/node-gyp#3282/#3250/#3214, not fixed by
+      # forcing msvs_version — that only filters candidates *after* the
+      # crashing enumeration step, and installing a newer node-gyp isn't an
+      # option either since node-gyp 13.x requires Node >=22). Using Node 22
+      # here sidesteps all of it: a real prebuilt exists, so node-gyp is
+      # never invoked at all.
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
 
-      # windows-latest runners now ship a preview Visual Studio 2026 (v18)
-      # install alongside the stable VS2022 one. node-gyp's auto-detection
-      # can't parse the preview's version string and crashes outright — this
-      # is a confirmed, still-open upstream bug as of this writing
-      # (nodejs/node-gyp#3282, #3250, #3214), not fixed by a newer node-gyp
-      # (verified directly: `npm install -g node-gyp@latest` also requires
-      # Node >=22, which this Node-20 job can't use anyway). Forcing
-      # msvs_version=2022 skips auto-detection entirely and points node-gyp
-      # straight at the stable install, sidestepping the bug regardless of
-      # whether a fix ever lands upstream. `npm config set msvs_version` is
-      # rejected outright by this npm version ("not a valid npm option") —
-      # confirmed directly — so it has to be set as the env var npm forwards
-      # to child build scripts instead.
       - run: npm ci
-        env:
-          npm_config_msvs_version: 2022
 
       # Detection pipeline tests are pure regex/logic, no network or native-asset
       # dependency — safe to run on every OS as a smoke check before packaging.
