@@ -48,6 +48,19 @@ jobs:
         with:
           node-version: 20
 
+      # windows-latest runners now ship a preview Visual Studio install
+      # alongside the stable one; the node-gyp bundled with npm/Node 20 can't
+      # parse that preview's version string and crashes VS auto-detection
+      # (confirmed directly: `npm ci` failed trying to build better-sqlite3
+      # from source after finding no prebuilt binary for this Node/arch combo).
+      # A newer node-gyp handles this fine — install one and point npm at it.
+      - name: Work around node-gyp/VS-preview detection bug (Windows)
+        if: matrix.name == 'windows'
+        shell: bash
+        run: |
+          npm install -g node-gyp@latest
+          npm config set node_gyp "$(npm prefix -g)/node_modules/node-gyp/bin/node-gyp.js"
+
       - run: npm ci
 
       # Detection pipeline tests are pure regex/logic, no network or native-asset
