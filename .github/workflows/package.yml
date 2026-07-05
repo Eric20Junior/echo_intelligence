@@ -57,13 +57,13 @@ jobs:
       # Node >=22, which this Node-20 job can't use anyway). Forcing
       # msvs_version=2022 skips auto-detection entirely and points node-gyp
       # straight at the stable install, sidestepping the bug regardless of
-      # whether a fix ever lands upstream.
-      - name: Force VS2022 for node-gyp (Windows)
-        if: matrix.name == 'windows'
-        shell: bash
-        run: npm config set msvs_version 2022
-
+      # whether a fix ever lands upstream. `npm config set msvs_version` is
+      # rejected outright by this npm version ("not a valid npm option") —
+      # confirmed directly — so it has to be set as the env var npm forwards
+      # to child build scripts instead.
       - run: npm ci
+        env:
+          npm_config_msvs_version: 2022
 
       # Detection pipeline tests are pure regex/logic, no network or native-asset
       # dependency — safe to run on every OS as a smoke check before packaging.
