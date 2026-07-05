@@ -4,18 +4,30 @@
 
 Echo Intelligence displays the **King James Version (KJV)**, which is in the public domain — no licensing action is required to use or distribute the bundled verse text (`data/verses.db`).
 
-## Getting a build
+## Installing
 
-Download the `echo-intelligence-<your-os>` folder for your operating system (built via `.github/workflows/package.yml`; Windows and macOS builds have not yet been run/verified on real hardware — see `docs/roadmap.md`'s Phase 6 section). Unzip it anywhere.
+Open a terminal and run the line for your OS. No Node.js, git, or anything else needs to be installed first — this downloads the latest prebuilt release (built by `.github/workflows/package.yml`; Windows and macOS builds have not yet been smoke-tested on real hardware — see `docs/roadmap.md`'s Phase 6 section) and unzips it to `~/echo-intelligence` (`%USERPROFILE%\echo-intelligence` on Windows).
+
+**macOS/Linux** (Terminal):
+```
+curl -fsSL https://raw.githubusercontent.com/Eric20Junior/echo_intelligence/main/install.sh | bash
+```
+
+**Windows** (PowerShell):
+```
+iwr https://raw.githubusercontent.com/Eric20Junior/echo_intelligence/main/install.ps1 -useb | iex
+```
+
+Prefer to do it by hand instead? Download the `echo-intelligence-<your-os>.zip` from the [latest release](https://github.com/Eric20Junior/echo_intelligence/releases/latest) and unzip it anywhere yourself.
 
 ## First run
 
-1. Open the `bin` folder inside what you unzipped, and run `echo-intelligence` (double-click on Windows/macOS, or `./echo-intelligence` in a terminal on Linux).
+1. Open the `bin` folder inside where it was installed, and run `echo-intelligence` (double-click on Windows/macOS, or `./echo-intelligence` in a terminal on Linux).
 2. The first time it runs, a page opens asking for an API key:
    - **Deepgram** (for speech-to-text) — get one free at [console.deepgram.com](https://console.deepgram.com)
 3. Enter it, click **Save and continue**, then close that window and run `echo-intelligence` again — it remembers your key from now on (saved to a config file in your user profile, not inside the app folder).
-4. Open `http://localhost:8787/operator` in your browser. Pick your microphone from the dropdown and click **Start Listening**.
-5. Open `http://localhost:8787/` (or click "Open on second display" from the operator page) on the projector/screen the congregation sees, and click **Go Fullscreen**.
+4. Open `http://localhost:8787/` in your browser — this is the operator control panel. Pick your microphone from the dropdown and click **Start Listening**.
+5. Open `http://localhost:8787/overlay` on the projector/screen the congregation sees, and click **Go Fullscreen**.
 
 ## About the scripture-reference fallback
 

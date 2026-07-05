@@ -1,6 +1,8 @@
 const express = require("express");
 const { WebSocketServer } = require("ws");
 const url = require("url");
+const fs = require("fs");
+const { resolvePath } = require("../paths");
 const session = require("./session");
 const presentation = require("./presentation");
 const deviceRoutes = require("./routes/deviceRoutes");
@@ -43,9 +45,19 @@ function start(port) {
   app.use("/api", phraseSuggestionsRoutes);
   app.use("/api", readingNavSuggestionsRoutes);
 
+  // Serves the frontend's static export (frontend/scripts/package.js runs
+  // `next build` with output: "export" and copies frontend/out/ here) when
+  // packaged, so one process/port serves both the API and the UI — no
+  // separate Next server needed. In dev this directory doesn't exist (the
+  // frontend runs via `next dev` on its own port instead), so this is a no-op.
+  const publicDir = resolvePath("public");
+  if (fs.existsSync(publicDir)) {
+    app.use(express.static(publicDir));
+  }
+
   const server = app.listen(port, () => {
-    console.log(`overlay: http://localhost:${port}`);
-    console.log(`operator: http://localhost:${port}/operator`);
+    console.log(`operator: http://localhost:${port}/`);
+    console.log(`overlay: http://localhost:${port}/overlay`);
   });
 
   const wss = new WebSocketServer({ server });
