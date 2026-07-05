@@ -1,0 +1,43 @@
+# Roadmap Phase 6 packaging build. The Linux job's steps are exactly what was
+# run and verified manually during development (see docs/roadmap.md's Phase 6
+# section) — `npm test` then `npm run package`, nothing CI-specific. The
+# windows-latest/macos-latest jobs run the identical `npm run package` script
+# (scripts/package.js already branches on process.platform for the OS-specific
+# SEA/codesign steps), but have NOT been executed on those runners yet — this
+# workflow itself is the first real attempt, flagged as unverified until it's
+# actually been run and its artifacts smoke-tested on those OSes.
+name: package
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - run: npm ci
+
+      # Detection pipeline tests are pure regex/logic, no network or native-asset
+      # dependency — safe to run on every OS as a smoke check before packaging.
+      - run: npm test
+
+      - run: npm run package
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: echo-intelligence-${{ matrix.os }}
+          path: backend/dist/

@@ -1,0 +1,73 @@
+@import "tailwindcss";
+@config "../tailwind.config.ts";
+
+/* Echo Intelligence tokens — dark is the baseline. */
+:root {
+  --bg-0: #0a0908;
+  --bg-1: #131110;
+  --bg-2: #1b1815;
+  --bg-3: #242019;
+  --border-1: #2e2a23;
+  --border-2: #403a2f;
+
+  --text-1: #f2ede3;
+  --text-2: #aaa08c;
+  --text-3: #6f685a;
+  --text-inverse: #16130f;
+
+  --gold: #c9a45c;
+  --gold-bright: #e6c987;
+  --gold-dim: #8a7444;
+  --gold-wash: #c9a45c1f;
+
+  --pending: #cf9a3f;
+  --pending-wash: #cf9a3f1a;
+  --live: #7ba57f;
+  --live-wash: #7ba57f1a;
+  --danger: #c26a5c;
+  --danger-wash: #c26a5c1a;
+  --info: #8b9bab;
+  --info-wash: #8b9bab1a;
+
+  --text-scripture: #efe7d6;
+  --text-reference: var(--gold-bright);
+
+  --shadow-card: 0 1px 2px #00000066, 0 4px 16px #00000033;
+  --shadow-raised: 0 2px 6px #00000080, 0 10px 32px #00000059;
+  --focus-ring: #c9a45c99;
+}
+
+/* Light mode — operator panel only; never applied to the projector route. */
+[data-theme="light"] {
+  --bg-1: #f6f2e9;
+  --bg-2: #fffdf7;
+  --bg-3: #efe9dc;
+  --border-1: #e0d8c6;
+  --border-2: #c9bfa8;
+
+  --text-1: #29241c;
+  --text-2: #6d6656;
+  --text-3: #a39a86;
+  --text-inverse: #f6f2e9;
+
+  --gold: #a07f36;
+  --gold-bright: #8a6c2a;
+  --gold-dim: #c4ad7d;
+  --gold-wash: #a07f361a;
+
+  --pending: #a4762a;
+  --pending-wash: #a4762a14;
+  --live: #4e7d54;
+  --live-wash: #4e7d5414;
+  --danger: #a84f41;
+  --danger-wash: #a84f4114;
+  --info: #5b7186;
+  --info-wash: #5b718614;
+
+  --focus-ring: #a07f3699;
+}
+
+body {
+  background: var(--bg-1);
+  color: var(--text-1);
+}
