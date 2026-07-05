@@ -61,13 +61,18 @@ function main() {
   fs.mkdirSync(path.join(DIST, "data"), { recursive: true });
   fs.mkdirSync(path.join(DIST, "models"), { recursive: true });
 
+  // npx (like npm) ships as a .cmd shell shim on Windows, not a directly
+  // executable binary — execFileSync needs shell: true there or it fails
+  // with ENOENT (confirmed directly against a real windows-latest CI run).
+  const npxOpts = { cwd: ROOT, stdio: "inherit", shell: process.platform === "win32" };
+
   console.log("bundling...");
   execFileSync(
     "npx",
     ["esbuild", "scripts/live-demo.js", "--bundle", "--platform=node", "--target=node20",
      "--external:better-sqlite3", "--external:node-llama-cpp", "--external:@huggingface/transformers",
      "--outfile=" + path.join(BIN_DIR, "app.js")],
-    { cwd: ROOT, stdio: "inherit" }
+    npxOpts
   );
 
   console.log("copying native deps + data assets...");
@@ -125,7 +130,7 @@ function main() {
   console.log("injecting SEA blob...");
   const postjectArgs = [exePath, "NODE_SEA_BLOB", blobPath, "--sentinel-fuse", SEA_FUSE];
   if (process.platform === "darwin") postjectArgs.push("--macho-segment-name", "NODE_SEA");
-  execFileSync("npx", ["postject", ...postjectArgs], { stdio: "inherit" });
+  execFileSync("npx", ["postject", ...postjectArgs], { stdio: "inherit", shell: process.platform === "win32" });
 
   if (process.platform === "darwin") {
     execFileSync("codesign", ["--sign", "-", exePath]);
