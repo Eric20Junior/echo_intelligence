@@ -24,6 +24,11 @@ permissions:
 jobs:
   build:
     strategy:
+      # Each OS is an independent verification target (that's the whole point of
+      # this matrix — Windows/macOS were unverified until this workflow actually
+      # ran). Default fail-fast would cancel the other two the moment any one
+      # OS fails, hiding whether they'd have passed.
+      fail-fast: false
       matrix:
         include:
           - os: ubuntu-latest
