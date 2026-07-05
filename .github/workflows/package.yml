@@ -48,18 +48,20 @@ jobs:
         with:
           node-version: 20
 
-      # windows-latest runners now ship a preview Visual Studio install
-      # alongside the stable one; the node-gyp bundled with npm/Node 20 can't
-      # parse that preview's version string and crashes VS auto-detection
-      # (confirmed directly: `npm ci` failed trying to build better-sqlite3
-      # from source after finding no prebuilt binary for this Node/arch combo).
-      # A newer node-gyp handles this fine — install one and point npm at it.
-      - name: Work around node-gyp/VS-preview detection bug (Windows)
+      # windows-latest runners now ship a preview Visual Studio 2026 (v18)
+      # install alongside the stable VS2022 one. node-gyp's auto-detection
+      # can't parse the preview's version string and crashes outright — this
+      # is a confirmed, still-open upstream bug as of this writing
+      # (nodejs/node-gyp#3282, #3250, #3214), not fixed by a newer node-gyp
+      # (verified directly: `npm install -g node-gyp@latest` also requires
+      # Node >=22, which this Node-20 job can't use anyway). Forcing
+      # msvs_version=2022 skips auto-detection entirely and points node-gyp
+      # straight at the stable install, sidestepping the bug regardless of
+      # whether a fix ever lands upstream.
+      - name: Force VS2022 for node-gyp (Windows)
         if: matrix.name == 'windows'
         shell: bash
-        run: |
-          npm install -g node-gyp@latest
-          npm config set node_gyp "$(npm prefix -g)/node_modules/node-gyp/bin/node-gyp.js"
+        run: npm config set msvs_version 2022
 
       - run: npm ci
 
