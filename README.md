@@ -46,8 +46,9 @@ iwr https://raw.githubusercontent.com/Eric20Junior/echo_intelligence/main/instal
 
 See [docs/install.md](docs/install.md) for first-run setup (API key, picking a
 microphone) and platform-specific notes (unsigned-binary warnings on
-Windows/macOS). Prebuilt Windows/macOS binaries have not yet been smoke-tested
-on real hardware — see [docs/roadmap.md](docs/roadmap.md)'s Phase 6 section.
+Windows/macOS). All three OSes are built and verified by
+[.github/workflows/package.yml](.github/workflows/package.yml) on every
+tagged release.
 
 ## Architecture
 
@@ -70,7 +71,7 @@ One process, one port (`8787`), no Electron — see `docs/roadmap.md` for why.
 # backend
 cd backend
 npm install
-npm test        # 27-case detection corpus + 12-case reading-mode corpus
+npm test        # detection corpus + reading-mode corpus
 npm run live     # starts the backend on :8787
 
 # frontend (separate terminal)
@@ -79,14 +80,28 @@ npm install
 npm run dev      # starts on :3000, talks to the backend at :8787
 ```
 
-Useful environment variables (backend/`.env`, see `backend/lib/config.js`):
+To test from another device (e.g. a phone as the projector display) on the
+same network, start the frontend with `NEXT_PUBLIC_BACKEND_HOST` set to your
+machine's LAN IP, then open `http://<lan-ip>:3000` from that device:
+
+```bash
+NEXT_PUBLIC_BACKEND_HOST=192.168.x.x:8787 npm run dev
+```
+
+Useful environment variables (backend `.env`, see `backend/lib/config.js`):
 
 | Variable | Values | Default | Purpose |
 |---|---|---|---|
 | `DEEPGRAM_API_KEY` | — | — | Required unless `STT_BACKEND=local` |
 | `STT_BACKEND` | `deepgram` \| `local` | `deepgram` | Speech-to-text engine |
-| `DETECTOR_BACKEND` | `local` \| `anthropic` | `local` | Reference-extraction fallback (local Qwen2.5 vs. a rollback path to Claude Haiku for accuracy comparison) |
+| `DETECTOR_BACKEND` | `local` \| `anthropic` | `local` | Reference-extraction fallback (local Qwen2.5 vs. a rollback path to Claude Haiku — faster, but needs an API key and internet) |
 | `ANTHROPIC_API_KEY` | — | — | Only needed if `DETECTOR_BACKEND=anthropic` |
+
+Frontend (`frontend` `.env.local`):
+
+| Variable | Default | Purpose |
+|---|---|---|
+| `NEXT_PUBLIC_BACKEND_HOST` | `localhost:8787` | Backend address the browser connects to — set this when accessing the frontend from a different device than the one running the backend |
 
 ## Packaging a release
 
