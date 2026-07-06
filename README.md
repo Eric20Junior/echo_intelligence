@@ -39,10 +39,11 @@ No Node.js, git, or anything else needs to be installed first.
 curl -fsSL https://raw.githubusercontent.com/Eric20Junior/echo_intelligence/main/install.sh | bash
 ```
 
-**Windows (PowerShell):**
+**Windows (requires Windows 10 or later; PowerShell — not Command Prompt/cmd.exe):**
 ```powershell
-iwr https://raw.githubusercontent.com/Eric20Junior/echo_intelligence/main/install.ps1 -useb | iex
+[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12; iwr https://raw.githubusercontent.com/Eric20Junior/echo_intelligence/main/install.ps1 -useb | iex
 ```
+Getting `'iwr' is not recognized`? You're probably in Command Prompt — open **PowerShell** from the Start menu instead.
 
 See [docs/install.md](docs/install.md) for first-run setup (API key, picking a
 microphone) and platform-specific notes (unsigned-binary warnings on
