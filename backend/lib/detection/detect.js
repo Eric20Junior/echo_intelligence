@@ -62,7 +62,19 @@ async function detectReference(rawText) {
     }
   }
 
-  if (result.status === "no_match") {
+  // Cheap pre-filter before the expensive LLM call: every real spoken reference
+  // needs at least a chapter or verse number, so an utterance with no number at
+  // all (once normalize() has already converted spoken numbers to digits, e.g.
+  // "twenty eight" -> "28") has essentially zero chance of being one. Skips the
+  // call outright rather than trying to recognize specific non-reference
+  // phrasings — a broad shape check, not a word list, since narrow pattern-
+  // matching breaks the moment phrasing varies (every preacher differs). This
+  // doesn't fully solve the LLM fallback's cost on slow (non-AVX2) hardware —
+  // a numbered sermon point ("number one...") still has a digit and still
+  // triggers the call — but it skips the large share of ordinary sermon
+  // speech that has no number in it at all, confirmed live to be the majority
+  // of no_match utterances during continuous speech.
+  if (result.status === "no_match" && /\d/.test(result.normalized)) {
     const llmCandidate = await getLLMFallback().extractCandidateViaLLM(rawText);
     if (llmCandidate) {
       const validated = validateCandidate(llmCandidate);
