@@ -37,6 +37,48 @@ function copyNativeDep(name) {
   fs.cpSync(path.join(ROOT, "node_modules", name), path.join(BIN_DIR, "node_modules", name), { recursive: true });
 }
 
+// node-llama-cpp's actual native binary ships as a *separate* npm package per
+// platform/arch/backend (e.g. @node-llama-cpp/linux-x64-cuda), listed only
+// under node-llama-cpp's optionalDependencies -- copyWithTransitiveDeps below
+// only walks regular "dependencies", so it never copies any of these. Verified
+// directly: a packaged build tested from a truly isolated copy (no surrounding
+// dev node_modules to fall back on, matching a real user's extracted install)
+// had no native binary at all and tried to git-clone + compile llama.cpp from
+// source via cmake-js, which non-technical operators don't have installed.
+// lib/detection/fallback/local-llm.js forces gpu: false unconditionally
+// (unpredictable GPU drivers on operator laptops), so exactly one CPU-only
+// variant per platform is both correct AND avoids bundling the GPU variants'
+// dead weight (confirmed: linux-x64-cuda-ext alone is 365MB on this machine).
+const NODE_LLAMA_CPP_BINARY_PACKAGE = {
+  "linux-x64": "@node-llama-cpp/linux-x64",
+  "linux-arm64": "@node-llama-cpp/linux-arm64",
+  "linux-arm": "@node-llama-cpp/linux-armv7l",
+  "darwin-x64": "@node-llama-cpp/mac-x64",
+  // No CPU-only build is published for Apple Silicon -- Metal is the only
+  // available backend for darwin-arm64, so this isn't bloat to trim.
+  "darwin-arm64": "@node-llama-cpp/mac-arm64-metal",
+  "win32-x64": "@node-llama-cpp/win-x64",
+  "win32-arm64": "@node-llama-cpp/win-arm64",
+}[`${process.platform}-${process.arch}`];
+
+// onnxruntime-node (a regular dependency of @huggingface/transformers, the
+// local Whisper STT option) bundles prebuilt binaries for every OS/arch AND
+// an unused CUDA/TensorRT runtime inside its own package folder -- confirmed
+// directly: libonnxruntime_providers_cuda.so alone is 156MB, even though
+// lib/capture/stt-source-local.js never requests GPU acceleration. Trim to
+// just the current platform/arch's CPU provider.
+function pruneOnnxRuntimeBinaries() {
+  const napiDir = path.join(BIN_DIR, "node_modules", "onnxruntime-node", "bin", "napi-v6");
+  const platformDir = { win32: "win32", darwin: "darwin", linux: "linux" }[process.platform];
+  for (const entry of fs.readdirSync(napiDir)) {
+    if (entry !== platformDir) fs.rmSync(path.join(napiDir, entry), { recursive: true, force: true });
+  }
+  const archDir = path.join(napiDir, platformDir, process.arch);
+  for (const file of fs.readdirSync(archDir)) {
+    if (/providers_(cuda|tensorrt)/i.test(file)) fs.rmSync(path.join(archDir, file));
+  }
+}
+
 // node-llama-cpp has ~27 direct dependencies (npm hoists them flat into node_modules/,
 // not nested under node-llama-cpp/node_modules/), each with their own further
 // dependencies. Hand-picking a subset like copyNativeDep does for better-sqlite3 would
@@ -80,11 +122,16 @@ function main() {
   copyNativeDep("bindings");
   copyNativeDep("file-uri-to-path");
   copyWithTransitiveDeps("node-llama-cpp");
+  if (!NODE_LLAMA_CPP_BINARY_PACKAGE) {
+    throw new Error(`No known @node-llama-cpp binary package for ${process.platform}-${process.arch}`);
+  }
+  copyNativeDep(NODE_LLAMA_CPP_BINARY_PACKAGE);
   // @huggingface/transformers (the local Whisper STT option, lib/capture/stt-source-local.js)
   // pulls in onnxruntime-node's prebuilt .node binaries for every platform/arch via a
   // template-string require esbuild can't statically resolve — marked external above and
   // copied whole here instead, same reasoning as node-llama-cpp.
   copyWithTransitiveDeps("@huggingface/transformers");
+  pruneOnnxRuntimeBinaries();
   fs.copyFileSync(path.join(ROOT, "data", "verses.db"), path.join(DIST, "data", "verses.db"));
 
   const modelFiles = fs.readdirSync(path.join(ROOT, "models")).filter((f) => f.endsWith(".gguf"));
