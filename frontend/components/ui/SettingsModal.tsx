@@ -20,6 +20,23 @@ type Section = "audio" | "speech" | "service" | "bible" | "display" | "remote" |
 
 const SERVICE_SECTIONS: ServiceSection[] = ["worship", "sermon", "response"];
 
+type OverlayPosition = "center" | "tl" | "tr" | "bl" | "br";
+type OverlaySize = "small" | "medium" | "large";
+
+const OVERLAY_POSITIONS: { id: OverlayPosition; label: string }[] = [
+  { id: "center", label: "Center" },
+  { id: "tl", label: "Top-left" },
+  { id: "tr", label: "Top-right" },
+  { id: "bl", label: "Bottom-left" },
+  { id: "br", label: "Bottom-right" },
+];
+
+const OVERLAY_SIZES: { id: OverlaySize; label: string }[] = [
+  { id: "small", label: "Small" },
+  { id: "medium", label: "Medium" },
+  { id: "large", label: "Large" },
+];
+
 const SECTIONS: { id: Section; label: string; icon: string }[] = [
   { id: "audio", label: "Audio", icon: "🎙" },
   { id: "speech", label: "Speech Recognition", icon: "💬" },
@@ -31,6 +48,106 @@ const SECTIONS: { id: Section; label: string; icon: string }[] = [
   { id: "suggestions", label: "Suggestions", icon: "💡" },
   { id: "help", label: "Help", icon: "❓" },
 ];
+
+function OverlayOutputCard({
+  label,
+  icon,
+  transparent,
+  onTransparentChange,
+  position,
+  onPositionChange,
+  size,
+  onSizeChange,
+  url,
+}: {
+  label: string;
+  icon: string;
+  transparent: boolean;
+  onTransparentChange: (v: boolean) => void;
+  position: OverlayPosition;
+  onPositionChange: (v: OverlayPosition) => void;
+  size: OverlaySize;
+  onSizeChange: (v: OverlaySize) => void;
+  url: string;
+}) {
+  const [copied, setCopied] = useState(false);
+
+  async function copy() {
+    await navigator.clipboard.writeText(url);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  }
+
+  return (
+    <div className="flex-1 rounded-md border border-border-1 bg-bg-2 p-3">
+      <div className="mb-3 flex items-center gap-2 text-sm font-semibold text-text-1">
+        <span>{icon}</span>
+        <span>{label}</span>
+      </div>
+
+      <label className="flex items-start gap-2 text-sm text-text-1">
+        <input type="checkbox" checked={transparent} onChange={(e) => onTransparentChange(e.target.checked)} className="mt-0.5" />
+        <span>
+          <div className="font-semibold">Transparent (for OBS)</div>
+          <div className="text-xs text-text-3">Verse on a translucent card instead of a solid background.</div>
+        </span>
+      </label>
+
+      {transparent && (
+        <div className="mt-3 flex flex-col gap-3">
+          <div>
+            <div className="mb-1 text-xs font-semibold uppercase tracking-caps text-text-3">Position</div>
+            <div className="flex flex-wrap gap-1.5">
+              {OVERLAY_POSITIONS.map((p) => (
+                <button
+                  key={p.id}
+                  onClick={() => onPositionChange(p.id)}
+                  className={`h-control rounded-sm border px-2 text-xs font-semibold ${
+                    position === p.id ? "border-gold bg-gold-wash text-gold" : "border-border-2 text-text-2 hover:bg-bg-1"
+                  }`}
+                >
+                  {p.label}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div>
+            <div className="mb-1 text-xs font-semibold uppercase tracking-caps text-text-3">Size</div>
+            <div className="flex gap-1.5">
+              {OVERLAY_SIZES.map((s) => (
+                <button
+                  key={s.id}
+                  onClick={() => onSizeChange(s.id)}
+                  className={`h-control rounded-sm border px-2 text-xs font-semibold ${
+                    size === s.id ? "border-gold bg-gold-wash text-gold" : "border-border-2 text-text-2 hover:bg-bg-1"
+                  }`}
+                >
+                  {s.label}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      <div className="mt-3">
+        <div className="mb-1 text-xs font-semibold uppercase tracking-caps text-text-3">Overlay URL</div>
+        <div className="flex items-center gap-2">
+          <input
+            readOnly
+            value={url}
+            onFocus={(e) => e.target.select()}
+            className="h-control w-full rounded-sm border border-border-2 bg-bg-1 px-2 font-mono text-xs text-text-1"
+          />
+          <button onClick={copy} className="h-control w-fit flex-none rounded-sm bg-gold px-3 text-xs font-semibold text-bg-1">
+            {copied ? "Copied" : "Copy"}
+          </button>
+        </div>
+        <p className="mt-1 text-xs text-text-3">Add as a Browser Source in OBS or any streaming software.</p>
+      </div>
+    </div>
+  );
+}
 
 interface Props {
   open: boolean;
@@ -71,6 +188,12 @@ export function SettingsModal({
   const [aliasSuggestions, setAliasSuggestions] = useState<AliasSuggestion[]>([]);
   const [phraseSuggestions, setPhraseSuggestions] = useState<PhraseSuggestion[]>([]);
   const [readingNavSuggestions, setReadingNavSuggestions] = useState<ReadingNavSuggestion[]>([]);
+  const [mainTransparent, setMainTransparent] = useState(false);
+  const [mainPosition, setMainPosition] = useState<OverlayPosition>("center");
+  const [mainSize, setMainSize] = useState<OverlaySize>("large");
+  const [altTransparent, setAltTransparent] = useState(true);
+  const [altPosition, setAltPosition] = useState<OverlayPosition>("br");
+  const [altSize, setAltSize] = useState<OverlaySize>("medium");
 
   useEffect(() => {
     if (!open || section !== "keys") return;
@@ -104,6 +227,11 @@ export function SettingsModal({
   async function resolveReadingNavSuggestion(suggestion: ReadingNavSuggestion, action: "approve" | "reject" | "ignore") {
     await fetch(`${BACKEND_HTTP_ORIGIN}/api/reading-nav-suggestions/${suggestion.id}/${action}`, { method: "POST" });
     setReadingNavSuggestions((prev) => prev.filter((s) => s.id !== suggestion.id));
+  }
+
+  const overlayBaseUrl = `${BACKEND_HTTP_ORIGIN}/overlay`;
+  function buildOverlayUrl(transparent: boolean, position: OverlayPosition, size: OverlaySize) {
+    return transparent ? `${overlayBaseUrl}?transparent=1&position=${position}&size=${size}` : overlayBaseUrl;
   }
 
   async function saveKeys() {
@@ -343,9 +471,38 @@ export function SettingsModal({
             )}
 
             {section === "display" && (
-              <p className="text-sm text-text-3">
-                Projector display styling (fonts, colors, verse layout) isn&apos;t configurable yet — the overlay page uses fixed styling.
-              </p>
+              <div className="flex flex-col gap-3">
+                <p className="text-xs text-text-3">
+                  Two independent overlay outputs — e.g. a full-screen feed for the projector, and a transparent one for OBS/livestreaming.
+                </p>
+                <div className="flex gap-4">
+                  <OverlayOutputCard
+                    label="Main Output"
+                    icon="🖥"
+                    transparent={mainTransparent}
+                    onTransparentChange={setMainTransparent}
+                    position={mainPosition}
+                    onPositionChange={setMainPosition}
+                    size={mainSize}
+                    onSizeChange={setMainSize}
+                    url={buildOverlayUrl(mainTransparent, mainPosition, mainSize)}
+                  />
+                  <OverlayOutputCard
+                    label="Alternate Output"
+                    icon="📡"
+                    transparent={altTransparent}
+                    onTransparentChange={setAltTransparent}
+                    position={altPosition}
+                    onPositionChange={setAltPosition}
+                    size={altSize}
+                    onSizeChange={setAltSize}
+                    url={buildOverlayUrl(altTransparent, altPosition, altSize)}
+                  />
+                </div>
+                <p className="text-xs text-text-3">
+                  Open a URL directly on the projector/screen (then click “Go Fullscreen”), or add it as a Browser Source in OBS.
+                </p>
+              </div>
             )}
 
             {section === "remote" && (
