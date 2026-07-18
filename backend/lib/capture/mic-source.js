@@ -105,8 +105,12 @@ function buildArgs(device) {
   const output = ["-f", "s16le", "-ar", String(SAMPLE_RATE), "-ac", "1", "-loglevel", "error", "-"];
 
   if (process.platform === "win32") {
-    const input = device && device !== "default" ? `audio=${device}` : "audio=default";
-    return ["-f", "dshow", "-i", input, ...output];
+    // dshow has no "default" device keyword like ALSA/avfoundation do — it only
+    // matches a device by its exact enumerated name. Passing "audio=default"
+    // literally fails to find a device named "default" and ffmpeg exits with no
+    // audio and no thrown error, which is why this must already be resolved to
+    // a real device name by the time buildArgs runs (see start() below).
+    return ["-f", "dshow", "-i", `audio=${device}`, ...output];
   }
   if (process.platform === "darwin") {
     const input = device && device !== "default" ? `:${device}` : ":0";
@@ -116,12 +120,49 @@ function buildArgs(device) {
   return ["-f", "alsa", "-i", input, ...output];
 }
 
-function start({ device, onChunk, onError }) {
-  const ffmpeg = spawn(resolveFfmpegPath(), buildArgs(device));
-  ffmpeg.stdout.on("data", onChunk);
+// dshow needs a concrete device name; resolve "default"/unset to the first
+// enumerated audio capture device. Throws if Windows has no audio capture
+// device enumerable at all (e.g. mic privacy permission blocking ffmpeg, or no
+// mic/loopback device present) so the caller can surface a real error instead
+// of silently capturing nothing.
+async function resolveWindowsDevice(device) {
+  if (device && device !== "default") return device;
+  const devices = (await listDevicesWindows()).filter((d) => d.id !== "default");
+  if (devices.length === 0) {
+    throw new Error(
+      "no audio capture device found on Windows — check Settings > Privacy & security > Microphone " +
+        "(allow desktop apps to access the microphone), and that a microphone or a loopback device " +
+        '(e.g. "Stereo Mix") is enabled in Sound settings',
+    );
+  }
+  return devices[0].id;
+}
+
+async function start({ device, onChunk, onError }) {
+  let resolvedDevice = device;
+  if (process.platform === "win32") {
+    try {
+      resolvedDevice = await resolveWindowsDevice(device);
+    } catch (err) {
+      onError?.(err);
+      return { stop: () => {} };
+    }
+  }
+
+  const ffmpeg = spawn(resolveFfmpegPath(), buildArgs(resolvedDevice));
+  let receivedData = false;
+  ffmpeg.stdout.on("data", (chunk) => {
+    receivedData = true;
+    onChunk(chunk);
+  });
   ffmpeg.stderr.on("data", (chunk) => console.error("ffmpeg:", chunk.toString().trim()));
   ffmpeg.on("error", (err) => {
     onError?.(new Error(`failed to start ffmpeg capture: ${err.message}`));
+  });
+  ffmpeg.on("exit", (code) => {
+    if (code !== 0 && code !== null && !receivedData) {
+      onError?.(new Error(`ffmpeg capture exited immediately (code ${code}) without producing audio — check the selected device`));
+    }
   });
 
   return { stop: () => ffmpeg.kill() };

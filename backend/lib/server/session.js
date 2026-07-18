@@ -109,7 +109,7 @@ async function start({ device }) {
   active.stt = await connectStt(device);
 
   let lastLevelBroadcast = 0;
-  const mic = micSource.start({
+  const mic = await micSource.start({
     device,
     onChunk: (rawChunk) => {
       const chunk = applyGain(rawChunk, presentation.getSettings().gain);
