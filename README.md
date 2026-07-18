@@ -51,6 +51,16 @@ Windows/macOS). All three OSes are built and verified by
 [.github/workflows/package.yml](.github/workflows/package.yml) on every
 tagged release.
 
+### Updating
+
+Re-run the same one-line install command above — it always downloads the
+latest release and overwrites the previous install in place. Your settings
+(`~/.echo-intelligence/config.json`) and learned data (`data/log.db`) are
+untouched. To hear about new releases, click **Watch → Custom →
+Releases** on the [GitHub repo](https://github.com/Eric20Junior/echo_intelligence),
+or check the [releases page](https://github.com/Eric20Junior/echo_intelligence/releases)
+for what's new in each version.
+
 ## Architecture
 
 Two sibling folders:
