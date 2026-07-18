@@ -23,7 +23,7 @@ TMP_ZIP="$(mktemp -t echo-intelligence-XXXXXX).zip"
 trap 'rm -f "$TMP_ZIP"' EXIT
 
 echo "Downloading Echo Intelligence ($OS_NAME)..."
-curl -fL "$URL" -o "$TMP_ZIP"
+curl -fL --progress-bar "$URL" -o "$TMP_ZIP"
 
 mkdir -p "$DEST"
 echo "Unzipping to $DEST..."
