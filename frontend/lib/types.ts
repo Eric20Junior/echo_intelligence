@@ -59,7 +59,8 @@ export type OperatorMessage =
   | { type: "section_updated"; value: ServiceSection }
   | { type: "audio_level"; level: number }
   | { type: "transcript"; text: string }
-  | { type: "lock"; role: "control" | "viewer" };
+  | { type: "lock"; role: "control" | "viewer" }
+  | { type: "mic_error"; message: string; canOpenSettings: boolean };
 
 export interface ReadingModeState {
   bookId: string;

@@ -205,6 +205,18 @@ function emitTranscript(text) {
   broadcastFn("operator", { type: "transcript", text });
 }
 
+// Mic capture failures (e.g. Windows privacy permission blocking the device,
+// no capture device found) previously only hit the server console — the
+// operator UI showed "listening" with a dead level meter and no explanation.
+// Surfaced to the operator WS so it can show a real error instead.
+// canOpenSettings: whether the operator UI should offer a button that opens
+// the OS mic privacy settings (see routes/deviceRoutes.js's /open-mic-settings) —
+// only meaningful on Windows, where a blocked desktop-app mic permission is a
+// real, common, silent cause (ffmpeg just never receives audio, no error).
+function emitMicError(message, { canOpenSettings = false } = {}) {
+  broadcastFn("operator", { type: "mic_error", message, canOpenSettings });
+}
+
 // --- Plan tab (roadmap Phase 8 step 3) ---
 
 function listPlan() {
@@ -288,4 +300,5 @@ module.exports = {
   setSection,
   emitAudioLevel,
   emitTranscript,
+  emitMicError,
 };

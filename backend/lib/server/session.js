@@ -30,6 +30,14 @@ function isActive() {
 
 const RECONNECT_DELAY_MS = 1000;
 
+// How long to wait after starting capture before concluding the mic is
+// silently producing nothing. Covers the case a plain ffmpeg exit-code check
+// can't (see mic-source.js's start()): on Windows, a blocked "let desktop
+// apps access the microphone" permission doesn't error or exit ffmpeg at
+// all — it just never delivers a single audio frame, which is exactly the
+// symptom reported live ("Start Listening" active, level meter never moves).
+const MIC_SILENCE_TIMEOUT_MS = 5000;
+
 function onTranscript(transcript) {
   // Service-section pause (roadmap Phase 8 step 3): worship music/lyrics are
   // a real source of false-positive book-name matches, so detection is
@@ -109,9 +117,11 @@ async function start({ device }) {
   active.stt = await connectStt(device);
 
   let lastLevelBroadcast = 0;
+  let receivedAnyChunk = false;
   const mic = await micSource.start({
     device,
     onChunk: (rawChunk) => {
+      receivedAnyChunk = true;
       const chunk = applyGain(rawChunk, presentation.getSettings().gain);
       // Reads active.stt (not a captured local) so a reconnect mid-session
       // (see connectStt's onClose above) swaps in the new socket transparently.
@@ -122,11 +132,37 @@ async function start({ device }) {
         presentation.emitAudioLevel(rmsLevel(chunk));
       }
     },
-    onError: (err) => console.error(err.message),
+    onError: (err) => {
+      console.error(err.message);
+      presentation.emitMicError(err.message, { canOpenSettings: process.platform === "win32" });
+      // Without this, a mic that fails to open leaves `active` set forever —
+      // the operator UI shows "listening" indefinitely and every retry of
+      // Start Listening just gets alreadyActive:true back with no way out
+      // short of restarting the whole app.
+      if (active && active.mic === mic) {
+        active.stt.stop();
+        active = null;
+      }
+    },
   });
   console.log(`listening on mic "${device || "default"}" — speak a scripture reference`);
 
   active.mic = mic;
+
+  setTimeout(() => {
+    if (!active || active.mic !== mic || receivedAnyChunk) return;
+    const message =
+      process.platform === "win32"
+        ? "No audio received from the microphone after 5 seconds. Windows may be blocking desktop apps from using the mic."
+        : "No audio received from the microphone after 5 seconds. Check the selected device and OS mic permissions.";
+    presentation.emitMicError(message, { canOpenSettings: process.platform === "win32" });
+    // Same reasoning as the onError cleanup above — a hung, silent capture
+    // shouldn't leave the session stuck "active" with no way to retry.
+    mic.stop();
+    active.stt.stop();
+    active = null;
+  }, MIC_SILENCE_TIMEOUT_MS);
+
   return { alreadyActive: false, device };
 }
 

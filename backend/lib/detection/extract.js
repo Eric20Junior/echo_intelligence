@@ -12,8 +12,18 @@ const { findLearnedAlias, getLearnedAliasesByLengthDesc, recordLearnedAliasMatch
 // ("verse one and two", "verse one through two", "verse one plus two" all match
 // the same way). Capped at one filler word so it can't drift into an unrelated
 // number appearing later in the sentence.
+//
+// Same one-filler-word tolerance applies between the chapter number and the
+// verse marker/verseStart, for the same reason ("chapter two FROM verse
+// three", "chapter two starting AT verse three" — observed live: "from"
+// dropped the whole verse range because the marker didn't immediately follow
+// the chapter number). Restricted to [^\d:\s]+ (letters, not \S+) unlike the
+// range connector above — a plain \S+ here would happily "consume" the
+// colon+verse-number itself as the filler word in digit-punctuated input
+// ("8:28 30", from "8:28-30" after normalize's hyphen-to-space), stealing 28
+// and leaving 30 misread as verseStart.
 const AFTER_BOOK_PATTERN =
-  /^\s*(?:chapter\s+)?(\d{1,3})(?:\s*(?::|verses?)?\s*(\d{1,3})(?:\s+(?:\S+\s+)?(\d{1,3}))?)?/;
+  /^\s*(?:chapter\s+)?(\d{1,3})(?:\s*(?:[^\d:\s]+\s+)?(?::|verses?)?\s*(\d{1,3})(?:\s+(?:\S+\s+)?(\d{1,3}))?)?/;
 
 // Single-chapter books (Jude, Philemon, 2/3 John, Obadiah) are never spoken with
 // a chapter number — "Jude verses three and four" means chapter 1 verses 3-4,

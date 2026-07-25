@@ -87,6 +87,15 @@ export default function OperatorPage() {
       setTranscript((prev) => [...prev.slice(-19), msg.text]);
     } else if (msg.type === "lock") {
       setViewer(msg.role === "viewer");
+    } else if (msg.type === "mic_error") {
+      push(
+        "danger",
+        "Mic capture failed",
+        msg.message,
+        msg.canOpenSettings
+          ? { label: "Open microphone settings", onClick: () => fetch(`${BACKEND_HTTP_ORIGIN}/api/open-mic-settings`, { method: "POST" }) }
+          : undefined,
+      );
     }
   });
 
@@ -158,7 +167,12 @@ export default function OperatorPage() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ device: selectedDevice }),
     });
-    if (res.ok) push("success", "Listening started", selectedDeviceLabel());
+    if (res.ok) {
+      push("success", "Listening started", selectedDeviceLabel());
+    } else if (res.status !== 409) {
+      const body = await res.json().catch(() => ({}));
+      push("danger", "Couldn't start listening", body.error);
+    }
     refreshStatus();
   }
 

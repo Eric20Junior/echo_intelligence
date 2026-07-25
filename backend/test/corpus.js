@@ -17,6 +17,8 @@ module.exports = [
   // range
   { input: "Romans eight, verses twenty-eight through thirty", expect: { status: "auto_display", bookId: "ROM", chapter: 8, verseStart: 28, verseEnd: 30 } },
   { input: "Romans 8:28-30", expect: { status: "auto_display", bookId: "ROM", chapter: 8, verseStart: 28, verseEnd: 30 } },
+  // a filler word ("from") between the chapter number and "verse" previously dropped the whole verse range — observed live
+  { input: "So look at first Timothy chapter two from verse three to four", expect: { status: "auto_display", bookId: "1TI", chapter: 2, verseStart: 3, verseEnd: 4 } },
 
   // chapter only
   { input: "turn with me to Psalm 23", expect: { status: "auto_display", bookId: "PSA", chapter: 23, verseStart: null } },
