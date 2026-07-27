@@ -74,6 +74,15 @@ jobs:
 
       - run: npm run package
 
+      # The ffmpeg binary is the entire capture path (lib/capture/mic-source.js)
+      # and was missing from every release for months: nothing in the build
+      # fails without it, and on Linux a system ffmpeg masks the gap entirely,
+      # so only a Windows operator ever saw the symptom. Assert it's actually
+      # in the artifact rather than trusting the copy step stays in place.
+      - name: Verify ffmpeg is bundled
+        shell: bash
+        run: test -f dist/bin/ffmpeg || test -f dist/bin/ffmpeg.exe
+
       - uses: actions/upload-artifact@v4
         with:
           name: echo-intelligence-${{ matrix.name }}

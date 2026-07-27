@@ -9,6 +9,7 @@
 // but have not been run on those OSes — flagged in docs/roadmap.md as a
 // required follow-up before Phase 6 is considered fully verified.
 const { execFile, execFileSync, spawn } = require("child_process");
+const fs = require("fs");
 const staticFfmpegPath = require("ffmpeg-static");
 
 const SAMPLE_RATE = 16000;
@@ -23,22 +24,55 @@ const SAMPLE_RATE = 16000;
 // command working fine when it resolves to the system binary. Falls back to
 // the bundled static binary (the normal case on Windows/macOS, which don't
 // have this ALSA-specific plugin-loading behavior) if no system ffmpeg exists.
+//
+// Returns null when neither is available, rather than a path to a file that
+// isn't there. That case was shipped for real: scripts/package.js never copied
+// the ffmpeg-static binary into dist/, so every packaged build resolved to a
+// nonexistent <bin>/ffmpeg(.exe). Linux hid it (a system ffmpeg is nearly
+// always present), Windows didn't — capture produced an empty device list and
+// a "no capture device found, check mic permissions" error that sent an
+// operator hunting through Windows privacy settings for a packaging bug.
 let resolvedFfmpegPath = null;
+let ffmpegResolved = false;
 function resolveFfmpegPath() {
-  if (resolvedFfmpegPath) return resolvedFfmpegPath;
+  if (ffmpegResolved) return resolvedFfmpegPath;
+  ffmpegResolved = true;
   try {
     execFileSync("ffmpeg", ["-version"], { stdio: "ignore" });
     resolvedFfmpegPath = "ffmpeg";
+    return resolvedFfmpegPath;
   } catch {
-    resolvedFfmpegPath = staticFfmpegPath;
+    // No system ffmpeg — fall through to the bundled one.
   }
+  // ffmpeg-static resolves its binary relative to its own __dirname, which the
+  // SEA bundle collapses to the executable's own folder (see lib/paths.js), so
+  // this path is only correct because package.js now copies the binary there.
+  if (staticFfmpegPath && fs.existsSync(staticFfmpegPath)) resolvedFfmpegPath = staticFfmpegPath;
   return resolvedFfmpegPath;
 }
 
+const FFMPEG_MISSING_MESSAGE =
+  "ffmpeg is missing from this install, so no audio can be captured. This is a packaging problem, not a " +
+  "microphone permission problem — reinstall Echo Intelligence to get a build that bundles it, or install " +
+  "ffmpeg yourself and make sure it's on PATH.";
+
+// Lets callers (the /api/devices route, session start) tell "ffmpeg isn't
+// here" apart from "ffmpeg ran and found no microphone" — two failures with
+// the same visible symptom (an empty device list) but completely different fixes.
+function checkFfmpeg() {
+  return resolveFfmpegPath() ? { ok: true } : { ok: false, message: FFMPEG_MISSING_MESSAGE };
+}
+
 function listDevices() {
-  if (process.platform === "win32") return listDevicesWindows();
-  if (process.platform === "darwin") return listDevicesMac();
+  // Linux enumerates via arecord, which doesn't need ffmpeg at all; the other
+  // two do, and execFile'ing a null path would throw rather than degrade.
+  if (process.platform === "win32") return resolveFfmpegPath() ? listDevicesWindows() : Promise.resolve(defaultDeviceOnly());
+  if (process.platform === "darwin") return resolveFfmpegPath() ? listDevicesMac() : Promise.resolve(defaultDeviceOnly());
   return listDevicesLinux();
+}
+
+function defaultDeviceOnly() {
+  return [{ id: "default", label: "System default" }];
 }
 
 // Parses `arecord -l` output, e.g.:
@@ -139,6 +173,12 @@ async function resolveWindowsDevice(device) {
 }
 
 async function start({ device, onChunk, onError }) {
+  const ffmpegPath = resolveFfmpegPath();
+  if (!ffmpegPath) {
+    onError?.(new Error(FFMPEG_MISSING_MESSAGE));
+    return { stop: () => {} };
+  }
+
   let resolvedDevice = device;
   if (process.platform === "win32") {
     try {
@@ -149,7 +189,7 @@ async function start({ device, onChunk, onError }) {
     }
   }
 
-  const ffmpeg = spawn(resolveFfmpegPath(), buildArgs(resolvedDevice));
+  const ffmpeg = spawn(ffmpegPath, buildArgs(resolvedDevice));
   let receivedData = false;
   ffmpeg.stdout.on("data", (chunk) => {
     receivedData = true;
@@ -168,4 +208,4 @@ async function start({ device, onChunk, onError }) {
   return { stop: () => ffmpeg.kill() };
 }
 
-module.exports = { listDevices, start, SAMPLE_RATE };
+module.exports = { listDevices, start, checkFfmpeg, SAMPLE_RATE };
