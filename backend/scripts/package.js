@@ -17,6 +17,7 @@
 // the executable, not inside it):
 //   dist/
 //     bin/echo-intelligence(.exe)   <- the SEA executable
+//     bin/ffmpeg(.exe)              <- audio capture (see copyFfmpegBinary below)
 //     bin/node_modules/             <- better-sqlite3 + node-llama-cpp + their transitive deps
 //     data/verses.db
 //     models/*.gguf                 <- local LLM fallback model (see lib/local-llm.js)
@@ -32,6 +33,32 @@ const FRONTEND_DIR = path.join(REPO_ROOT, "frontend");
 const DIST = path.join(ROOT, "dist");
 const BIN_DIR = path.join(DIST, "bin");
 const SEA_FUSE = "NODE_SEA_FUSE_fce680ab2cc467b6e072b8b5df1996b2";
+
+// ffmpeg is the entire capture path on every OS (lib/capture/mic-source.js —
+// there is no second, platform-specific capture backend), and its binary is a
+// plain executable inside the ffmpeg-static package rather than a require()d
+// module, so esbuild bundles only that package's path-resolution code and
+// never the binary itself. Omitting this copy shipped a build that could not
+// capture audio at all: ffmpeg-static resolves to <bin>/ffmpeg(.exe), which
+// didn't exist. Linux masked it (mic-source prefers a system ffmpeg, and
+// desktop Linux nearly always has one); on Windows it surfaced as an empty
+// device dropdown and a silent, permanently-flat level meter.
+//
+// Destination is BIN_DIR specifically because ffmpeg-static computes its path
+// from its own __dirname, which the SEA bundle collapses to the executable's
+// folder (see lib/paths.js) — this is the one location that resolution finds.
+function copyFfmpegBinary() {
+  const src = require("ffmpeg-static");
+  if (!src || !fs.existsSync(src)) {
+    throw new Error(
+      `ffmpeg-static has no binary for ${process.platform}-${process.arch} at ${src} — ` +
+        "run `npm ci` (its postinstall downloads the platform binary) before packaging",
+    );
+  }
+  const dest = path.join(BIN_DIR, path.basename(src));
+  fs.copyFileSync(src, dest);
+  if (process.platform !== "win32") fs.chmodSync(dest, 0o755);
+}
 
 function copyNativeDep(name) {
   fs.cpSync(path.join(ROOT, "node_modules", name), path.join(BIN_DIR, "node_modules", name), { recursive: true });
@@ -118,6 +145,7 @@ function main() {
   );
 
   console.log("copying native deps + data assets...");
+  copyFfmpegBinary();
   copyNativeDep("better-sqlite3");
   copyNativeDep("bindings");
   copyNativeDep("file-uri-to-path");

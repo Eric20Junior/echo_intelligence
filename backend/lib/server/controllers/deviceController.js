@@ -6,7 +6,12 @@ const readingMode = require("../../detection/reading-mode");
 
 async function listDevices(req, res) {
   const devices = await micSource.listDevices();
-  res.json({ devices });
+  // A dropdown holding nothing but "System default" looks like a mic problem
+  // but is also exactly what a build missing its ffmpeg binary produces, so
+  // say which one it is instead of leaving the operator to guess (that guess
+  // cost a live debugging session pointed at Windows privacy settings).
+  const ffmpeg = micSource.checkFfmpeg();
+  res.json({ devices, ...(ffmpeg.ok ? {} : { error: ffmpeg.message }) });
 }
 
 function getStatus(req, res) {

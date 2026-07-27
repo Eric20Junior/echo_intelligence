@@ -102,9 +102,20 @@ export default function OperatorPage() {
   useEffect(() => {
     fetch(`${BACKEND_HTTP_ORIGIN}/api/devices`)
       .then((res) => res.json())
-      .then((body: { devices: MicDevice[] }) => setDevices(body.devices));
+      .then((body: { devices: MicDevice[]; error?: string }) => {
+        setDevices(body.devices);
+        // Carries an action so useToasts skips its 4s auto-expiry: nothing in
+        // the app works until this is fixed, and the only other clue is a
+        // dropdown that merely looks under-populated.
+        if (body.error) {
+          push("danger", "Audio capture unavailable", body.error, {
+            label: "How to reinstall",
+            onClick: () => window.open("https://github.com/Eric20Junior/echo_intelligence#updating", "_blank"),
+          });
+        }
+      });
     refreshStatus();
-  }, [refreshStatus]);
+  }, [refreshStatus, push]);
 
   function selectedDeviceLabel() {
     return devices.find((d) => d.id === selectedDevice)?.label ?? selectedDevice;
