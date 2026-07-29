@@ -57,7 +57,8 @@ const DETECTOR_BACKENDS: { id: DetectorBackend; label: string; blurb: string; ke
   {
     id: "local",
     label: "On this computer",
-    blurb: "No internet or key needed, but slow — on older machines it can interrupt transcription mid-service.",
+    blurb:
+      "No internet or key needed once set up, but downloads about 470MB the first time — and on older machines it's slow enough to interrupt transcription mid-service.",
     keyLabel: null,
   },
 ];

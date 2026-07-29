@@ -68,6 +68,15 @@ function main() {
   const { broadcast } = apiServer.start(PORT);
   presentation.init(broadcast);
 
+  // The local model isn't shipped in packaged builds any more (it was over half the
+  // download and the cloud backends never touch it — see scripts/package.js), so first
+  // use can mean a ~470MB fetch. Warm it here, deliberately not awaited: the operator
+  // UI comes up immediately and the download runs behind it, so neither the fetch nor
+  // the multi-second model load can land on a live utterance mid-sermon.
+  if (config.getDetectorBackend() === "local") {
+    require("../lib/detection/fallback/local-llm").warmUp();
+  }
+
   // Packaged double-click launch opens only a bare console window — open the operator
   // page for the volunteer so they never have to know to type the URL. Gated to real
   // installs (see isPackagedBuild) so `npm run live` doesn't hijack a dev's browser;
