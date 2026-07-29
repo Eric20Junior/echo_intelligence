@@ -63,10 +63,52 @@ Write-Host "Unzipping to $Dest..."
 Expand-Archive -Path $TmpZip -DestinationPath $Dest -Force
 Remove-Item $TmpZip
 
+$Exe = Join-Path $Dest "bin\echo-intelligence.exe"
+# Shipped with the frontend's static export, so it's present in every install.
+# Only 16x16/32x32 though, and it matters more here than elsewhere: the SEA
+# executable is a copied node.exe, so without this the shortcut would show the
+# Node.js logo. Worth replacing with a proper multi-resolution icon eventually.
+$Icon = Join-Path $Dest "public\favicon.ico"
+
+# Desktop + Start-menu shortcuts, so the operator double-clicks an icon instead
+# of typing a path into a terminal (the whole point of this being installable at
+# all). Wrapped in try/catch because $ErrorActionPreference is "Stop" up top and
+# a missing shortcut is cosmetic — it must never fail an otherwise-good install.
+#
+# The shortcut targets the .exe directly, so launching it shows a console window.
+# That's deliberate: the window is the operator's stop button ("close it to
+# quit") and the only place startup errors are visible. The app opens the
+# operator page in their browser by itself once it's up (lib/open-browser.js).
+$ShortcutMade = $false
+try {
+    $shell = New-Object -ComObject WScript.Shell
+    # GetFolderPath rather than "$env:USERPROFILE\Desktop" — it resolves a
+    # OneDrive-redirected Desktop, which is the default on plenty of machines.
+    foreach ($dir in @([Environment]::GetFolderPath("Desktop"), [Environment]::GetFolderPath("Programs"))) {
+        if (-not $dir -or -not (Test-Path $dir)) { continue }
+        $lnk = $shell.CreateShortcut((Join-Path $dir "Echo Intelligence.lnk"))
+        $lnk.TargetPath = $Exe
+        $lnk.WorkingDirectory = Join-Path $Dest "bin"
+        $lnk.Description = "Live scripture detection for church services"
+        if (Test-Path $Icon) { $lnk.IconLocation = $Icon }
+        $lnk.Save()
+        $ShortcutMade = $true
+    }
+}
+catch {
+    Write-Host "(Couldn't create shortcuts: $($_.Exception.Message))"
+}
+
 Write-Host ""
 Write-Host "Installed to $Dest"
-Write-Host "Run it with: $Dest\bin\echo-intelligence.exe"
-Write-Host "Then open http://localhost:8787/ in your browser."
+if ($ShortcutMade) {
+    Write-Host "Start it from the 'Echo Intelligence' icon on your desktop or Start menu."
+    Write-Host "It opens the operator page in your browser automatically."
+    Write-Host "(Or run it directly: $Exe)"
+} else {
+    Write-Host "Run it with: $Exe"
+    Write-Host "It opens the operator page in your browser automatically."
+}
 Write-Host ""
 Write-Host "Note: the app isn't code-signed. If Windows SmartScreen warns you,"
 Write-Host "click 'More info' then 'Run anyway'."

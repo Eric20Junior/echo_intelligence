@@ -1,4 +1,4 @@
-const { resolvePath } = require("../lib/paths");
+const { resolvePath, isPackagedBuild } = require("../lib/paths");
 require("dotenv").config({ path: resolvePath(".env"), quiet: true });
 const config = require("../lib/config");
 
@@ -67,6 +67,12 @@ function main() {
 
   const { broadcast } = apiServer.start(PORT);
   presentation.init(broadcast);
+
+  // Packaged double-click launch opens only a bare console window — open the operator
+  // page for the volunteer so they never have to know to type the URL. Gated to real
+  // installs (see isPackagedBuild) so `npm run live` doesn't hijack a dev's browser;
+  // best-effort, and ECHO_NO_BROWSER=1 opts out (see lib/open-browser.js).
+  if (isPackagedBuild()) require("../lib/open-browser").openBrowser(`http://localhost:${PORT}/`);
 
   console.log("open the operator page and click \"Start Listening\" to begin (Ctrl+C to stop)");
 
