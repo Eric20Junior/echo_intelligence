@@ -15,11 +15,13 @@
 // shape as stt-source.js, so lib/server/session.js needs zero changes to pick
 // between the two (see lib/config.js's getSttBackend()).
 const { rmsLevel } = require("./audio-level");
-const { resolvePath } = require("../paths");
+const { resolveWritableDir } = require("../paths");
 const { SAMPLE_RATE } = require("./mic-source");
 
 const MODEL_ID = "onnx-community/whisper-tiny.en";
-const CACHE_DIR = resolvePath("models", "whisper");
+// Written to on first use (transformers downloads the ONNX weights here), so it
+// belongs under the operator's data folder rather than the install folder.
+const CACHE_DIR = resolveWritableDir("models", "whisper");
 
 const SILENCE_RMS_THRESHOLD = 0.02; // below this = "quiet", tuned to mic noise floor, not speaking pace
 const SILENCE_HANG_MS = 700; // finalize an utterance after this much continuous quiet

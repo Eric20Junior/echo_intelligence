@@ -4,7 +4,7 @@
 // Phase 8 step 2) the backing store for the operator's History tab — no separate
 // history storage, this table already has everything except the eventual
 // operator decision, added below.
-const { resolvePath, requireNative } = require("./paths");
+const { resolveWritablePath, requireNative } = require("./paths");
 const { BOOKS } = require("../data/books");
 const Database = requireNative("better-sqlite3");
 
@@ -13,7 +13,7 @@ const BOOK_NAME_BY_ID = new Map(BOOKS.map((b) => [b.id, b.name]));
 let db = null;
 function getDb() {
   if (!db) {
-    db = new Database(resolvePath("data", "log.db"));
+    db = new Database(resolveWritablePath("data", "log.db"));
     db.exec(`
       CREATE TABLE IF NOT EXISTS detections (
         id INTEGER PRIMARY KEY AUTOINCREMENT,

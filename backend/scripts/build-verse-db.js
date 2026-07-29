@@ -42,5 +42,17 @@ for (const [key, text] of Object.entries(verses)) {
 }
 insertMany(rows);
 
+// Full-text index for lib/detection/content-search.js ("what's the verse that
+// talks about..."). Built here, at build time, because the shipped verses.db has
+// to be complete before it's installed: a native installer puts it in a
+// read-only app folder, so content-search can't create this on first use the way
+// it used to. External-content FTS5 — indexes the rows above rather than
+// duplicating the verse text, so this costs index size only.
+db.exec(`
+  DROP TABLE IF EXISTS verses_fts;
+  CREATE VIRTUAL TABLE verses_fts USING fts5(text, content='verses', content_rowid='rowid');
+  INSERT INTO verses_fts(verses_fts) VALUES('rebuild');
+`);
+
 console.log(`Loaded ${rows.length} verses into ${DB_PATH}`);
 db.close();

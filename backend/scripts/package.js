@@ -19,11 +19,14 @@
 //     bin/echo-intelligence(.exe)   <- the SEA executable
 //     bin/ffmpeg(.exe)              <- audio capture (see copyFfmpegBinary below)
 //     bin/node_modules/             <- better-sqlite3 + node-llama-cpp + their transitive deps
-//     data/verses.db
-//     models/                       <- empty; the local LLM's .gguf is downloaded on
-//                                      first use, not shipped (see main() below)
+//     data/verses.db                <- read-only, FTS index already built (build-verse-db.js)
 //     public/                       <- frontend's static export (`next build`, output: "export"),
 //                                      served by lib/server/api-server.js — see its header comment
+//
+// Nothing in this tree is written to at runtime. The detection log, saved config
+// and on-demand model downloads all live in the operator's own data folder
+// instead (lib/paths.js), which is what lets a native installer put this tree
+// somewhere the operator can't write — C:\Program Files, /Applications.
 const { execFileSync } = require("child_process");
 const fs = require("fs");
 const path = require("path");
@@ -142,14 +145,13 @@ function main() {
   fs.rmSync(DIST, { recursive: true, force: true });
   fs.mkdirSync(path.join(BIN_DIR, "node_modules"), { recursive: true });
   fs.mkdirSync(path.join(DIST, "data"), { recursive: true });
-  // Created empty on purpose. The local LLM's ~470MB .gguf is deliberately NOT
-  // bundled: it was over half the download, and the two default backends
-  // (Anthropic, Gemini) never load it, so nearly every install paid for bytes it
-  // never used — on church wifi that's where people give up. local-llm.js already
-  // fetches it via node-llama-cpp's resolveModelFile(), which needs this directory
-  // to exist as its writable target; scripts/live-demo.js warms it at startup so
-  // the download can't land mid-service.
-  fs.mkdirSync(path.join(DIST, "models"), { recursive: true });
+  // No models/ directory here any more. The local LLM's ~470MB .gguf is still
+  // deliberately NOT bundled (it was over half the download, and the two default
+  // backends never load it — on church wifi that's where people give up), but
+  // its download target is now the operator's data folder rather than a writable
+  // hole punched in the install tree; local-llm.js creates it on demand via
+  // resolveWritableDir(). scripts/live-demo.js still warms it at startup so the
+  // download can't land mid-service.
 
   // npx (like npm) ships as a .cmd shell shim on Windows, not a directly
   // executable binary — execFileSync needs shell: true there or it fails
@@ -183,7 +185,14 @@ function main() {
   pruneOnnxRuntimeBinaries();
   fs.copyFileSync(path.join(ROOT, "data", "verses.db"), path.join(DIST, "data", "verses.db"));
 
-  const modelFiles = fs.readdirSync(path.join(ROOT, "models")).filter((f) => f.endsWith(".gguf"));
+  // Purely informational: says out loud that a locally-cached model is being
+  // left behind on purpose, so a maintainer who sees the dist/ folder come out
+  // 470MB lighter than their dev checkout doesn't go looking for a bug.
+  // Tolerates a missing models/ dir — a fresh clone has none.
+  const modelsDir = path.join(ROOT, "models");
+  const modelFiles = fs.existsSync(modelsDir)
+    ? fs.readdirSync(modelsDir).filter((f) => f.endsWith(".gguf"))
+    : [];
   if (modelFiles.length > 0) {
     console.log(`not bundling ${modelFiles.length} local model file(s) — fetched on demand instead, see above`);
   }

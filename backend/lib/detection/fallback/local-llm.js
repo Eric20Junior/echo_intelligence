@@ -6,11 +6,14 @@
 // rather than any fine-tuning of this model.
 const fs = require("fs");
 const { findBookByAlias } = require("../../../data/books");
-const { resolvePath } = require("../../paths");
+const { resolveWritableDir } = require("../../paths");
 
 // node-llama-cpp is ESM-only, so it's loaded via dynamic import from this CJS file.
 const MODEL_URI = "hf:Qwen/Qwen2.5-0.5B-Instruct-GGUF:Q4_K_M";
-const MODELS_DIR = resolvePath("models");
+// Under the operator's data folder, not the install folder: this is a ~470MB
+// download that happens on first use (see scripts/package.js on why it isn't
+// bundled), and a native installer's app folder isn't writable.
+const MODELS_DIR = resolveWritableDir("models");
 
 // No separate `isReference` boolean: with grammar-constrained generation the model
 // emits object keys strictly in schema order, so a boolean listed before the fields

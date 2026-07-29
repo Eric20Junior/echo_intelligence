@@ -3,10 +3,14 @@
 // JSON file in the user's home directory instead. `.env` (developer workflow)
 // still takes priority if both keys are already set by the time this runs.
 const fs = require("fs");
-const os = require("os");
 const path = require("path");
+const { USER_DATA_ROOT } = require("./paths");
 
-const CONFIG_DIR = path.join(os.homedir(), ".echo-intelligence");
+// Always the user data folder, never the install folder — this file is written
+// by the operator's own Settings panel, and a native installer's app folder is
+// read-only. Same root the detection log and downloaded models use, so an
+// operator's data is all in one place (see lib/paths.js).
+const CONFIG_DIR = USER_DATA_ROOT;
 const CONFIG_PATH = path.join(CONFIG_DIR, "config.json");
 
 // Scripture-detection LLM fallback backend (see lib/detection/detect.js). Three

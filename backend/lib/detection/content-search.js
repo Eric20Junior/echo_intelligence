@@ -85,13 +85,17 @@ function wordSetOverlap(a, b) {
 let db = null;
 function getDb() {
   if (!db) {
-    db = new Database(resolvePath("data", "verses.db"));
-    // Built lazily against the existing verses.db (external-content FTS5 —
-    // indexes the same rows rather than duplicating verse text) so this works
-    // against any install's verses.db, dev or already-packaged, without a rebuild
-    // step. verses has an implicit rowid (no WITHOUT ROWID clause), so this is safe.
-    const exists = db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='verses_fts'").get();
-    if (!exists) {
+    // Read-only: verses.db is a shipped asset, and a native installer puts it in
+    // a folder the operator can't write to. scripts/build-verse-db.js creates
+    // verses_fts at build time so nothing has to be written here at runtime.
+    const dbPath = resolvePath("data", "verses.db");
+    db = new Database(dbPath, { readonly: true, fileMustExist: true });
+    if (!hasFtsTable(db)) {
+      // A verses.db built before build-verse-db.js added the index — only
+      // possible in a dev checkout or an in-place-upgraded zip install, both of
+      // which own their data folder, so reopening writable is safe here.
+      db.close();
+      db = new Database(dbPath);
       db.exec(`
         CREATE VIRTUAL TABLE verses_fts USING fts5(text, content='verses', content_rowid='rowid');
         INSERT INTO verses_fts(verses_fts) VALUES('rebuild');
@@ -99,6 +103,10 @@ function getDb() {
     }
   }
   return db;
+}
+
+function hasFtsTable(handle) {
+  return Boolean(handle.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='verses_fts'").get());
 }
 
 function toCandidate(row) {
