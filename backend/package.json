@@ -8,7 +8,8 @@
   "scripts": {
     "test": "node test/run.js && node test/reading-mode-run.js",
     "live": "node scripts/live-demo.js",
-    "package": "node scripts/build-verse-db.js && node scripts/package.js"
+    "package": "node scripts/build-verse-db.js && node scripts/package.js",
+    "installer:windows": "node scripts/build-installer-windows.js"
   },
   "keywords": [],
   "author": "",
@@ -29,6 +30,8 @@
   },
   "devDependencies": {
     "esbuild": "^0.28.1",
-    "postject": "^1.0.0-alpha.6"
+    "pe-library": "2.0.1",
+    "postject": "^1.0.0-alpha.6",
+    "resedit": "3.0.2"
   }
 }

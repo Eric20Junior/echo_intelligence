@@ -37,6 +37,10 @@ const FRONTEND_DIR = path.join(REPO_ROOT, "frontend");
 const DIST = path.join(ROOT, "dist");
 const BIN_DIR = path.join(DIST, "bin");
 const SEA_FUSE = "NODE_SEA_FUSE_fce680ab2cc467b6e072b8b5df1996b2";
+// Windows resource language id. Every string this app shows is English, and a
+// PE resource has to be filed under some language — 1033 (en-US) is the
+// conventional choice and what node.exe's own resources already use.
+const LANG_EN_US = 1033;
 
 // ffmpeg is the entire capture path on every OS (lib/capture/mic-source.js —
 // there is no second, platform-specific capture backend), and its binary is a
@@ -141,6 +145,79 @@ function copyWithTransitiveDeps(name, copied = new Set()) {
   }
 }
 
+// The SEA executable is a copied node.exe, so out of the box it carries Node's
+// icon and Node's version strings — the taskbar shows the Node.js logo while the
+// app runs, and right-click > Properties says "Node.js JavaScript Runtime".
+// Rewrite both to ours.
+//
+// MUST run AFTER postject injection, not before — which is the opposite of the
+// advice you'll find for this, and the opposite of what's true on Linux/macOS.
+// On Windows postject doesn't append the blob at a file offset; it adds it as a
+// *named PE resource* (verified on the resulting binary: type= 10,
+// id= "NODE_SEA_BLOB"), which the runtime finds via FindResource. A later
+// resource-table rewrite moves those bytes but keeps them addressable, so the
+// blob still loads. Going the other way round does break: rewriting resources
+// first leaves postject failing with "error: Relocation corrupted: BlockSize is
+// out of bound the binary's virtual size".
+//
+// Both orderings were tested directly against a real signed node.exe v22.14.0 and
+// the surviving binary was then run under Wine to confirm the injected blob still
+// executes, rather than trusting that a parseable resource table means a working
+// executable.
+//
+// resedit (pure JavaScript) rather than rcedit: rcedit wraps a Windows binary
+// and needs Wine to run anywhere else, which would make this step untestable
+// outside a Windows machine.
+function setWindowsExeMetadata(exePath) {
+  const PELibrary = require("pe-library");
+  const ResEdit = require("resedit");
+
+  // ignoreCert: the official node.exe this is copied from is Authenticode-signed,
+  // and pe-library refuses to parse a signed binary unless told to. Dropping that
+  // signature is correct rather than merely tolerable: the binary is about to be
+  // modified (icon, version strings, then the SEA blob), which invalidates
+  // Node's signature anyway — and a stale certificate table left pointing at
+  // bytes that no longer hash the same way makes Windows report the file as
+  // corrupt instead of merely unsigned. generate() below emits it unsigned.
+  const exe = PELibrary.NtExecutable.from(fs.readFileSync(exePath), { ignoreCert: true });
+  const res = PELibrary.NtExecutableResource.from(exe);
+
+  // node.exe's own icon group, whatever id it happens to use — replacing that
+  // group is what makes Explorer/taskbar pick ours up, since the *first* group
+  // by id is the one shown. Reading it back beats hardcoding an id that a future
+  // Node release could change.
+  const iconGroups = ResEdit.Resource.IconGroupEntry.fromEntries(res.entries);
+  const iconGroupId = iconGroups.length > 0 ? iconGroups[0].id : 1;
+  const iconFile = ResEdit.Data.IconFile.from(fs.readFileSync(path.join(REPO_ROOT, "assets", "icon.ico")));
+  ResEdit.Resource.IconGroupEntry.replaceIconsForResource(
+    res.entries,
+    iconGroupId,
+    LANG_EN_US,
+    iconFile.icons.map((item) => item.data),
+  );
+
+  const version = require(path.join(ROOT, "package.json")).version;
+  const [major, minor, patch] = version.split(".").map(Number);
+  const vi = ResEdit.Resource.VersionInfo.fromEntries(res.entries)[0];
+  vi.setFileVersion(major, minor, patch, 0, LANG_EN_US);
+  vi.setProductVersion(major, minor, patch, 0, LANG_EN_US);
+  vi.setStringValues(
+    { lang: LANG_EN_US, codepage: 1200 },
+    {
+      FileDescription: "Live scripture detection for church services",
+      ProductName: "Echo Intelligence",
+      CompanyName: "Echo Intelligence",
+      LegalCopyright: "",
+      OriginalFilename: "echo-intelligence.exe",
+      InternalName: "echo-intelligence",
+    },
+  );
+  vi.outputToResourceEntries(res.entries);
+
+  res.outputResource(exe);
+  fs.writeFileSync(exePath, Buffer.from(exe.generate()));
+}
+
 function main() {
   fs.rmSync(DIST, { recursive: true, force: true });
   fs.mkdirSync(path.join(BIN_DIR, "node_modules"), { recursive: true });
@@ -233,6 +310,12 @@ function main() {
   const postjectArgs = [exePath, "NODE_SEA_BLOB", blobPath, "--sentinel-fuse", SEA_FUSE];
   if (process.platform === "darwin") postjectArgs.push("--macho-segment-name", "NODE_SEA");
   execFileSync("npx", ["postject", ...postjectArgs], { stdio: "inherit", shell: process.platform === "win32" });
+
+  // After injection, deliberately — see setWindowsExeMetadata's header comment.
+  if (process.platform === "win32") {
+    console.log("setting icon + version info...");
+    setWindowsExeMetadata(exePath);
+  }
 
   if (process.platform === "darwin") {
     execFileSync("codesign", ["--sign", "-", exePath]);
