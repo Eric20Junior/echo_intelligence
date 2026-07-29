@@ -128,6 +128,13 @@ function approve(id) {
   pushHistory(display);
   broadcastFn("overlay", display);
   broadcastFn("operator", { type: "suggestion_resolved", id, action: "approved" });
+  // Also tell the operator UI to move this verse into its "On the projector" /
+  // "Recently shown" panels — suggestion_resolved only drops the card from the
+  // pending queue, and the operator's `recent` list is fed solely by snapshot +
+  // auto_display. Without this, approving a suggestion leaves those panels frozen
+  // on the last auto/manual display even though the overlay updated correctly.
+  // Mirrors manualDisplay, which broadcasts the same auto_display for this reason.
+  broadcastFn("operator", { type: "auto_display", entry: display });
   return display;
 }
 
