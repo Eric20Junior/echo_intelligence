@@ -45,9 +45,17 @@ export interface TranslationsInfo {
   options: TranslationOption[];
 }
 
+export type DetectorBackend = "anthropic" | "gemini" | "local";
+
 export interface ConfigStatus {
   deepgramConfigured: boolean;
   anthropicConfigured: boolean;
+  geminiConfigured: boolean;
+  detectorBackend: DetectorBackend;
+  detectorBackends: DetectorBackend[];
+  // DETECTOR_BACKEND in the environment outranks the saved choice; the picker is
+  // shown but disabled rather than accepting a click that restart would ignore.
+  detectorBackendLockedByEnv: boolean;
 }
 
 export type OperatorMessage =
