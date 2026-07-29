@@ -24,7 +24,7 @@ const BACKEND_CHOICES = `
   <div id="backends">
     <label class="choice"><input type="radio" name="backend" value="anthropic" /> <span><b>Anthropic Claude</b> — most accurate. Paid, but roughly a cent per service.</span></label>
     <label class="choice"><input type="radio" name="backend" value="gemini" /> <span><b>Google Gemini</b> — free tier, no card required.</span></label>
-    <label class="choice"><input type="radio" name="backend" value="local" /> <span><b>On this computer</b> — no internet or key needed, but slow and can interrupt transcription on older machines.</span></label>
+    <label class="choice"><input type="radio" name="backend" value="local" /> <span><b>On this computer</b> — no internet or key needed once set up, but downloads about 470MB the first time, and is slow enough on older machines that it can interrupt transcription.</span></label>
   </div>`;
 
 const SETUP_HTML = `<!doctype html>

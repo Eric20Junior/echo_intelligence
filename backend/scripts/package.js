@@ -20,7 +20,8 @@
 //     bin/ffmpeg(.exe)              <- audio capture (see copyFfmpegBinary below)
 //     bin/node_modules/             <- better-sqlite3 + node-llama-cpp + their transitive deps
 //     data/verses.db
-//     models/*.gguf                 <- local LLM fallback model (see lib/local-llm.js)
+//     models/                       <- empty; the local LLM's .gguf is downloaded on
+//                                      first use, not shipped (see main() below)
 //     public/                       <- frontend's static export (`next build`, output: "export"),
 //                                      served by lib/server/api-server.js — see its header comment
 const { execFileSync } = require("child_process");
@@ -106,6 +107,19 @@ function pruneOnnxRuntimeBinaries() {
   }
 }
 
+// Packages that are reachable through "dependencies" but provably unused at
+// runtime, so copyWithTransitiveDeps skips them (and anything only they pull in).
+//
+// onnxruntime-web is @huggingface/transformers' *browser* ONNX runtime, and it is a
+// hard dependency rather than an optional one, so the walk below would copy it —
+// 130MB of WebAssembly, the single largest thing in the bundle, into a Node-only
+// backend. Verified unused: transformers' Node entry point (dist/transformers.node.cjs,
+// its package.json "main") only ever require()s onnxruntime-node and
+// onnxruntime-common. The one piece of onnxruntime-web it does use (the WebGPU
+// bundle) is already inlined into that same .cjs file by its own build, and the
+// matching .wasm is fetched from a CDN at runtime, so nothing reads this directory.
+const EXCLUDED_PACKAGES = new Set(["onnxruntime-web"]);
+
 // node-llama-cpp has ~27 direct dependencies (npm hoists them flat into node_modules/,
 // not nested under node-llama-cpp/node_modules/), each with their own further
 // dependencies. Hand-picking a subset like copyNativeDep does for better-sqlite3 would
@@ -114,7 +128,7 @@ function pruneOnnxRuntimeBinaries() {
 // "dependencies" recursively and copy every package actually reachable from the given
 // entry package — correct by construction rather than by a maintained list.
 function copyWithTransitiveDeps(name, copied = new Set()) {
-  if (copied.has(name)) return;
+  if (copied.has(name) || EXCLUDED_PACKAGES.has(name)) return;
   copied.add(name);
   const srcDir = path.join(ROOT, "node_modules", name);
   fs.cpSync(srcDir, path.join(BIN_DIR, "node_modules", name), { recursive: true });
@@ -128,6 +142,13 @@ function main() {
   fs.rmSync(DIST, { recursive: true, force: true });
   fs.mkdirSync(path.join(BIN_DIR, "node_modules"), { recursive: true });
   fs.mkdirSync(path.join(DIST, "data"), { recursive: true });
+  // Created empty on purpose. The local LLM's ~470MB .gguf is deliberately NOT
+  // bundled: it was over half the download, and the two default backends
+  // (Anthropic, Gemini) never load it, so nearly every install paid for bytes it
+  // never used — on church wifi that's where people give up. local-llm.js already
+  // fetches it via node-llama-cpp's resolveModelFile(), which needs this directory
+  // to exist as its writable target; scripts/live-demo.js warms it at startup so
+  // the download can't land mid-service.
   fs.mkdirSync(path.join(DIST, "models"), { recursive: true });
 
   // npx (like npm) ships as a .cmd shell shim on Windows, not a directly
@@ -163,11 +184,8 @@ function main() {
   fs.copyFileSync(path.join(ROOT, "data", "verses.db"), path.join(DIST, "data", "verses.db"));
 
   const modelFiles = fs.readdirSync(path.join(ROOT, "models")).filter((f) => f.endsWith(".gguf"));
-  if (modelFiles.length === 0) {
-    throw new Error("No .gguf model found in backend/models/ — run the app once with DETECTOR_BACKEND=local to download it first.");
-  }
-  for (const file of modelFiles) {
-    fs.copyFileSync(path.join(ROOT, "models", file), path.join(DIST, "models", file));
+  if (modelFiles.length > 0) {
+    console.log(`not bundling ${modelFiles.length} local model file(s) — fetched on demand instead, see above`);
   }
 
   console.log("building frontend...");
