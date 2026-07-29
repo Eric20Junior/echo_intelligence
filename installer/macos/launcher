@@ -1,0 +1,24 @@
+#!/bin/bash
+# CFBundleExecutable. Double-clicking the .app runs this, and all it does is hand
+# the real binary to Terminal.
+#
+# Why not point CFBundleExecutable straight at the SEA binary: launching a bundle
+# from Finder gives it no attached terminal, so the app would start with nothing
+# on screen and — worse — no way to stop it and nowhere for a startup error to
+# appear. Every other platform here deliberately shows a console window (see the
+# [Icons] comment in installer/windows/echo-intelligence.iss and the Terminal=true
+# line in install.sh): the window is the operator's stop button, and closing it
+# quits. This keeps that behaviour on macOS.
+#
+# `open -a Terminal <file>` rather than `osascript`: it needs no Automation
+# permission prompt, which osascript telling Terminal what to do would trigger.
+set -euo pipefail
+
+HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+RESOURCES="$(cd "$HERE/../Resources" && pwd)"
+
+# The .command wrapper exists because `open -a Terminal` runs the file it's given,
+# and a file Terminal will run has to cd first: the SEA binary resolves data/ and
+# public/ relative to its own folder (backend/lib/paths.js), and Terminal would
+# otherwise start it from $HOME.
+exec open -a Terminal "$RESOURCES/app/bin/echo-intelligence.command"

@@ -9,7 +9,8 @@
     "test": "node test/run.js && node test/reading-mode-run.js",
     "live": "node scripts/live-demo.js",
     "package": "node scripts/build-verse-db.js && node scripts/package.js",
-    "installer:windows": "node scripts/build-installer-windows.js"
+    "installer:windows": "node scripts/build-installer-windows.js",
+    "installer:macos": "node scripts/build-installer-macos.js"
   },
   "keywords": [],
   "author": "",

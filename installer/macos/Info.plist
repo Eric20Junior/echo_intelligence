@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Template for the .app bundle's Info.plist. scripts/build-installer-macos.js
+  substitutes {{VERSION}} from backend/package.json, so nothing here is pinned to
+  one release.
+-->
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>CFBundleName</key>
+  <string>Echo Intelligence</string>
+  <key>CFBundleDisplayName</key>
+  <string>Echo Intelligence</string>
+
+  <!-- Reverse-DNS id. Stable forever: macOS keys per-app state off this, most
+       importantly the microphone grant in TCC, so changing it later would make
+       every existing install re-ask for mic access. -->
+  <key>CFBundleIdentifier</key>
+  <string>com.echointelligence.app</string>
+
+  <!-- Not the SEA binary itself but the small launcher beside it — see
+       installer/macos/launcher for why the hand-off to Terminal exists. -->
+  <key>CFBundleExecutable</key>
+  <string>launcher</string>
+
+  <!-- Resolved as Contents/Resources/icon.icns; the extension is optional here
+       and conventionally omitted. -->
+  <key>CFBundleIconFile</key>
+  <string>icon</string>
+
+  <key>CFBundlePackageType</key>
+  <string>APPL</string>
+  <key>CFBundleShortVersionString</key>
+  <string>{{VERSION}}</string>
+  <key>CFBundleVersion</key>
+  <string>{{VERSION}}</string>
+
+  <!-- 11.0 (Big Sur) is the floor the bundled prebuilts actually support:
+       better-sqlite3 and onnxruntime-node both publish darwin-arm64 binaries
+       from Big Sur up, and arm64 Macs never shipped anything older. -->
+  <key>LSMinimumSystemVersion</key>
+  <string>11.0</string>
+
+  <key>NSHighResolutionCapable</key>
+  <true/>
+
+  <!-- Declared for correctness, but read this before relying on it: capture runs
+       through ffmpeg's avfoundation input, spawned as a child of the SEA binary,
+       and the launcher hands that binary to Terminal. macOS attributes a TCC
+       prompt to the *responsible* process, which in that chain is Terminal — so
+       in practice the operator sees "Terminal wants to use the microphone".
+       Same as install.sh's existing .command path, so it's not a regression, and
+       the key is still correct for the in-bundle case. -->
+  <key>NSMicrophoneUsageDescription</key>
+  <string>Echo Intelligence listens to the service audio to detect scripture references as they are spoken.</string>
+</dict>
+</plist>
