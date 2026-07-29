@@ -4,7 +4,21 @@
 const Anthropic = require("@anthropic-ai/sdk");
 const { findBookByAlias } = require("../../../data/books");
 
-const client = new Anthropic();
+// Bounded so a slow or hung API call can't stall the detection pipeline during a live
+// service. Best-effort by design — the regex pass already failed, so timing out costs
+// a detection we didn't have, not one we lose.
+const REQUEST_TIMEOUT_MS = 8000;
+
+// Constructed lazily rather than at require-time. At require-time the client captures
+// whatever ANTHROPIC_API_KEY held then, which is the require-order landmine documented
+// in setup-server.js: a key saved during first-run setup wouldn't be picked up. Now
+// that the operator can also switch backends and enter a key from Settings, the window
+// for that mismatch is wider, so the lookup is deferred to first use.
+let client = null;
+function getClient() {
+  if (!client) client = new Anthropic({ timeout: REQUEST_TIMEOUT_MS });
+  return client;
+}
 
 const EXTRACT_TOOL = {
   name: "extract_scripture_reference",
@@ -26,18 +40,28 @@ const EXTRACT_TOOL = {
 
 // Returns a candidate shaped like extract.js's output (with source: "llm"), or null.
 async function extractCandidateViaLLM(rawText) {
-  const response = await client.messages.create({
-    model: "claude-haiku-4-5",
-    max_tokens: 256,
-    tools: [EXTRACT_TOOL],
-    tool_choice: { type: "tool", name: "extract_scripture_reference" },
-    messages: [
-      {
-        role: "user",
-        content: `Transcript fragment from a live church service, possibly garbled by speech-to-text: "${rawText}"\n\nDoes this contain a spoken Bible reference (a book name plus a chapter, optionally a verse)? STT errors are common — a book name may be misheard as a similar-sounding word. If you can confidently infer the intended book, chapter, and verse despite STT noise, extract them. If there's no reference here at all, set isReference to false.`,
-      },
-    ],
-  });
+  if (!process.env.ANTHROPIC_API_KEY) return null;
+
+  let response;
+  try {
+    response = await getClient().messages.create({
+      model: "claude-haiku-4-5",
+      max_tokens: 256,
+      tools: [EXTRACT_TOOL],
+      tool_choice: { type: "tool", name: "extract_scripture_reference" },
+      messages: [
+        {
+          role: "user",
+          content: `Transcript fragment from a live church service, possibly garbled by speech-to-text: "${rawText}"\n\nDoes this contain a spoken Bible reference (a book name plus a chapter, optionally a verse)? STT errors are common — a book name may be misheard as a similar-sounding word. If you can confidently infer the intended book, chapter, and verse despite STT noise, extract them. If there's no reference here at all, set isReference to false.`,
+        },
+      ],
+    });
+  } catch (err) {
+    // Rate limit, timeout, offline venue, expired key — degrade to "no candidate"
+    // rather than throwing into the detection pipeline mid-service.
+    console.warn(`[llm-fallback] request failed: ${err.message}`);
+    return null;
+  }
 
   const toolUse = response.content.find((b) => b.type === "tool_use");
   if (!toolUse || !toolUse.input.isReference || !toolUse.input.bookName) {

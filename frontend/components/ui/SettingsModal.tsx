@@ -6,6 +6,7 @@ import type {
   AliasSuggestion,
   AliasSuggestionsResponse,
   ConfigStatus,
+  DetectorBackend,
   MicDevice,
   OperatorSettings,
   PhraseSuggestion,
@@ -35,6 +36,30 @@ const OVERLAY_SIZES: { id: OverlaySize; label: string }[] = [
   { id: "small", label: "Small" },
   { id: "medium", label: "Medium" },
   { id: "large", label: "Large" },
+];
+
+// Scripture-detection backend, used only when the deterministic word matching can't
+// identify a spoken reference. Wording is aimed at a non-technical operator: no model
+// names, and the cost framed per service rather than per token.
+const DETECTOR_BACKENDS: { id: DetectorBackend; label: string; blurb: string; keyLabel: string | null }[] = [
+  {
+    id: "anthropic",
+    label: "Anthropic Claude",
+    blurb: "Most accurate. Paid, but only about a cent per service.",
+    keyLabel: "Anthropic",
+  },
+  {
+    id: "gemini",
+    label: "Google Gemini",
+    blurb: "Free tier — no card required. Slightly less accurate.",
+    keyLabel: "Gemini",
+  },
+  {
+    id: "local",
+    label: "On this computer",
+    blurb: "No internet or key needed, but slow — on older machines it can interrupt transcription mid-service.",
+    keyLabel: null,
+  },
 ];
 
 const SECTIONS: { id: Section; label: string; icon: string }[] = [
@@ -184,6 +209,10 @@ export function SettingsModal({
   const [configStatus, setConfigStatus] = useState<ConfigStatus | null>(null);
   const [deepgramKey, setDeepgramKey] = useState("");
   const [anthropicKey, setAnthropicKey] = useState("");
+  const [geminiKey, setGeminiKey] = useState("");
+  // Pending (unsaved) backend choice. Null means "unchanged from what the server
+  // reports", so the radio reflects saved state until the operator actually picks.
+  const [pendingBackend, setPendingBackend] = useState<DetectorBackend | null>(null);
   const [saveMessage, setSaveMessage] = useState("");
   const [aliasSuggestions, setAliasSuggestions] = useState<AliasSuggestion[]>([]);
   const [phraseSuggestions, setPhraseSuggestions] = useState<PhraseSuggestion[]>([]);
@@ -234,19 +263,41 @@ export function SettingsModal({
     return transparent ? `${overlayBaseUrl}?transparent=1&position=${position}&size=${size}` : overlayBaseUrl;
   }
 
+  // The backend the radio group is currently showing: the operator's unsaved pick if
+  // there is one, otherwise whatever the server last reported.
+  const activeBackend: DetectorBackend = pendingBackend ?? configStatus?.detectorBackend ?? "anthropic";
+  const backendLocked = configStatus?.detectorBackendLockedByEnv ?? false;
+
+  function backendKeyMissing(backend: DetectorBackend): boolean {
+    if (!configStatus) return false;
+    if (backend === "anthropic") return !configStatus.anthropicConfigured && !anthropicKey.trim();
+    if (backend === "gemini") return !configStatus.geminiConfigured && !geminiKey.trim();
+    return false;
+  }
+
   async function saveKeys() {
+    // Only send fields the operator actually filled in — the backend leaves stored
+    // keys alone for anything omitted, so blanks never clobber a saved key.
     const res = await fetch(`${BACKEND_HTTP_ORIGIN}/api/config`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ deepgramApiKey: deepgramKey.trim() || undefined, anthropicApiKey: anthropicKey.trim() || undefined }),
+      body: JSON.stringify({
+        deepgramApiKey: deepgramKey.trim() || undefined,
+        anthropicApiKey: anthropicKey.trim() || undefined,
+        geminiApiKey: geminiKey.trim() || undefined,
+        detectorBackend: backendLocked ? undefined : activeBackend,
+      }),
     });
     if (res.ok) {
-      setSaveMessage("Saved — restart the app for the new key to take effect.");
+      setSaveMessage("Saved — restart the app for the change to take effect.");
       setDeepgramKey("");
       setAnthropicKey("");
+      setGeminiKey("");
+      setPendingBackend(null);
       fetch(`${BACKEND_HTTP_ORIGIN}/api/config`).then((r) => r.json()).then(setConfigStatus);
     } else {
-      setSaveMessage("Couldn't save — at least one key is required.");
+      const body = await res.json().catch(() => ({}));
+      setSaveMessage(body.error ? `Couldn't save — ${body.error}.` : "Couldn't save.");
     }
   }
 
@@ -530,15 +581,78 @@ export function SettingsModal({
                   />
                 </div>
                 <div>
-                  <div className="mb-1 text-xs font-semibold uppercase tracking-caps text-text-3">Anthropic API key</div>
-                  <input
-                    type="password"
-                    placeholder={configStatus?.anthropicConfigured ? "•••••••• (configured)" : "Not set"}
-                    value={anthropicKey}
-                    onChange={(e) => setAnthropicKey(e.target.value)}
-                    className="h-control w-full rounded-sm border border-border-2 bg-bg-2 px-2 text-base text-text-1"
-                  />
+                  <div className="mb-1 text-xs font-semibold uppercase tracking-caps text-text-3">Scripture detection</div>
+                  <p className="mb-2 text-xs text-text-3">
+                    Used only when the built-in word matching can&apos;t identify a spoken reference.
+                  </p>
+                  <div className={`flex flex-col gap-1.5 ${backendLocked ? "opacity-60" : ""}`}>
+                    {DETECTOR_BACKENDS.map((b) => (
+                      <label
+                        key={b.id}
+                        className={`flex items-start gap-2 rounded-sm border px-3 py-2 text-sm ${
+                          activeBackend === b.id ? "border-gold bg-gold-wash" : "border-border-1"
+                        } ${backendLocked ? "cursor-not-allowed" : "cursor-pointer"}`}
+                      >
+                        <input
+                          type="radio"
+                          name="detector-backend"
+                          checked={activeBackend === b.id}
+                          disabled={backendLocked}
+                          onChange={() => setPendingBackend(b.id)}
+                          className="mt-1"
+                        />
+                        <span>
+                          <div className="font-semibold text-text-1">{b.label}</div>
+                          <div className="text-xs text-text-3">{b.blurb}</div>
+                        </span>
+                      </label>
+                    ))}
+                  </div>
+                  {backendLocked && (
+                    <p className="mt-1 text-xs text-text-3">
+                      Locked by the DETECTOR_BACKEND environment variable.
+                    </p>
+                  )}
                 </div>
+
+                {activeBackend === "anthropic" && (
+                  <div>
+                    <div className="mb-1 text-xs font-semibold uppercase tracking-caps text-text-3">Anthropic API key</div>
+                    <input
+                      type="password"
+                      placeholder={configStatus?.anthropicConfigured ? "•••••••• (configured)" : "Not set"}
+                      value={anthropicKey}
+                      onChange={(e) => setAnthropicKey(e.target.value)}
+                      className="h-control w-full rounded-sm border border-border-2 bg-bg-2 px-2 text-base text-text-1"
+                    />
+                    <p className="mt-1 text-xs text-text-3">
+                      Get one at <span className="font-mono">console.anthropic.com</span>.
+                    </p>
+                  </div>
+                )}
+
+                {activeBackend === "gemini" && (
+                  <div>
+                    <div className="mb-1 text-xs font-semibold uppercase tracking-caps text-text-3">Google Gemini API key</div>
+                    <input
+                      type="password"
+                      placeholder={configStatus?.geminiConfigured ? "•••••••• (configured)" : "Not set"}
+                      value={geminiKey}
+                      onChange={(e) => setGeminiKey(e.target.value)}
+                      className="h-control w-full rounded-sm border border-border-2 bg-bg-2 px-2 text-base text-text-1"
+                    />
+                    <p className="mt-1 text-xs text-text-3">
+                      Get one free at <span className="font-mono">aistudio.google.com/apikey</span>.
+                    </p>
+                  </div>
+                )}
+
+                {backendKeyMissing(activeBackend) && (
+                  <p className="text-xs text-pending">
+                    This option needs a key before detection will work.
+                  </p>
+                )}
+
                 <button
                   onClick={saveKeys}
                   className="h-control w-fit rounded-sm bg-gold px-4 text-sm font-semibold text-bg-1"

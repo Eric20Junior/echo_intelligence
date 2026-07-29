@@ -7,11 +7,17 @@ const { logDetection } = require("../log");
 const readingMode = require("./reading-mode");
 const { getDetectorBackend } = require("../config");
 
-// Required lazily (not at module load) so a "local" install never pulls in
-// @anthropic-ai/sdk, and an "anthropic" install never pays node-llama-cpp's
-// native-module load cost.
+// Required lazily (not at module load) so a cloud install never pays node-llama-cpp's
+// native-module load cost, and a "local" install never pulls in @anthropic-ai/sdk.
+// Each module exports the same extractCandidateViaLLM(rawText) contract.
+const FALLBACK_MODULES = {
+  anthropic: "./fallback/llm-fallback",
+  gemini: "./fallback/gemini-fallback",
+  local: "./fallback/local-llm",
+};
+
 function getLLMFallback() {
-  return getDetectorBackend() === "anthropic" ? require("./fallback/llm-fallback") : require("./fallback/local-llm");
+  return require(FALLBACK_MODULES[getDetectorBackend()]);
 }
 
 async function detectReference(rawText) {

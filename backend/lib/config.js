@@ -9,13 +9,43 @@ const path = require("path");
 const CONFIG_DIR = path.join(os.homedir(), ".echo-intelligence");
 const CONFIG_PATH = path.join(CONFIG_DIR, "config.json");
 
-// Scripture-detection LLM fallback backend (see lib/detect.js): "local" runs a
-// bundled small model on-device (lib/local-llm.js, no network, no API key) and
-// is the default so a fresh install works fully offline; "anthropic" is kept
-// as an opt-in comparison/rollback path (lib/llm-fallback.js) while the local
-// model's accuracy is still being validated against real services.
+// Scripture-detection LLM fallback backend (see lib/detection/detect.js). Three
+// options, each a drop-in module exporting extractCandidateViaLLM():
+//
+//   "anthropic" (default) — fallback/llm-fallback.js. Paid, but the fallback only
+//       fires when the regex pass finds nothing and each call is ~350 tokens, so a
+//       service costs on the order of a cent on Haiku.
+//   "gemini"              — fallback/gemini-fallback.js. Google's free tier, for
+//       churches that can't put a card on file.
+//   "local"               — fallback/local-llm.js. Fully offline, but 40-65s per
+//       inference on non-AVX2 CPUs, and that inference starves the event loop hard
+//       enough to drop the Deepgram WS mid-service (see that file's comments). Kept
+//       for genuinely offline venues; never the default because of that failure mode.
+//
+// DETECTOR_BACKEND (developer workflow) wins over the operator's saved choice, same
+// precedence .env already has over saved keys.
+const DETECTOR_BACKENDS = ["anthropic", "gemini", "local"];
+const DEFAULT_DETECTOR_BACKEND = "anthropic";
+
 function getDetectorBackend() {
-  return process.env.DETECTOR_BACKEND === "anthropic" ? "anthropic" : "local";
+  const fromEnv = process.env.DETECTOR_BACKEND;
+  if (DETECTOR_BACKENDS.includes(fromEnv)) return fromEnv;
+  const saved = readConfigFile().detectorBackend;
+  if (DETECTOR_BACKENDS.includes(saved)) return saved;
+  return DEFAULT_DETECTOR_BACKEND;
+}
+
+function setDetectorBackend(value) {
+  if (!DETECTOR_BACKENDS.includes(value)) throw new Error(`unknown detector backend: ${value}`);
+  writeConfigFile({ detectorBackend: value });
+}
+
+// Which key the selected cloud backend needs, or null when it needs none.
+function requiredDetectorKeyEnv() {
+  const backend = getDetectorBackend();
+  if (backend === "anthropic") return "ANTHROPIC_API_KEY";
+  if (backend === "gemini") return "GEMINI_API_KEY";
+  return null;
 }
 
 // STT backend (see lib/capture/stt-source.js vs stt-source-local.js): "deepgram"
@@ -37,29 +67,52 @@ function readConfigFile() {
   }
 }
 
-function loadConfig() {
-  const sttSatisfied = getSttBackend() === "local" || Boolean(process.env.DEEPGRAM_API_KEY);
-  const detectorSatisfied = getDetectorBackend() === "local" || Boolean(process.env.ANTHROPIC_API_KEY);
-  if (sttSatisfied && detectorSatisfied) return;
-  const saved = readConfigFile();
-  if (saved.deepgramApiKey) process.env.DEEPGRAM_API_KEY = process.env.DEEPGRAM_API_KEY || saved.deepgramApiKey;
-  if (saved.anthropicApiKey) process.env.ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY || saved.anthropicApiKey;
-}
-
-function saveConfig({ deepgramApiKey, anthropicApiKey }) {
-  // Merge rather than overwrite — confidenceThreshold (see below) is written
-  // independently by the calibration loop and must survive a later key re-entry.
-  const merged = { ...readConfigFile(), deepgramApiKey, anthropicApiKey };
+// Merge rather than overwrite — confidenceThreshold and detectorBackend are written
+// independently (by the calibration loop and the Settings panel respectively) and must
+// survive each other's writes.
+function writeConfigFile(patch) {
+  const merged = { ...readConfigFile(), ...patch };
   fs.mkdirSync(CONFIG_DIR, { recursive: true });
   fs.writeFileSync(CONFIG_PATH, JSON.stringify(merged, null, 2));
 }
 
-// Deepgram is only required when STT_BACKEND hasn't opted into the local
-// Whisper path; Anthropic is only required when DETECTOR_BACKEND opts back
-// into the API fallback.
+// Saved keys hydrate process.env only where .env hasn't already set one. Every
+// provider's key is hydrated regardless of the active backend, so switching backends
+// in Settings doesn't require re-entering a key that's already on disk.
+function loadConfig() {
+  const saved = readConfigFile();
+  const hydrate = (envVar, savedValue) => {
+    if (savedValue && !process.env[envVar]) process.env[envVar] = savedValue;
+  };
+  hydrate("DEEPGRAM_API_KEY", saved.deepgramApiKey);
+  hydrate("ANTHROPIC_API_KEY", saved.anthropicApiKey);
+  hydrate("GEMINI_API_KEY", saved.geminiApiKey);
+}
+
+// Whether a key is available at all — set in the environment (active now) OR saved to
+// disk (active on next launch). The Settings panel uses this so a key shows as "set"
+// the moment it's saved, instead of falsely reading "not set" until the app restarts
+// hydrates it into process.env. The active-vs-pending distinction is carried separately
+// by saveConfig's restartRequired flag, not by pretending the key isn't there.
+function isKeyConfigured(envVar, savedKey) {
+  if (process.env[envVar]) return true;
+  return Boolean(readConfigFile()[savedKey]);
+}
+
+function saveConfig({ deepgramApiKey, anthropicApiKey, geminiApiKey }) {
+  const patch = {};
+  if (deepgramApiKey) patch.deepgramApiKey = deepgramApiKey;
+  if (anthropicApiKey) patch.anthropicApiKey = anthropicApiKey;
+  if (geminiApiKey) patch.geminiApiKey = geminiApiKey;
+  writeConfigFile(patch);
+}
+
+// Deepgram is only required when STT_BACKEND hasn't opted into the local Whisper
+// path; the detector key is whichever the selected backend needs (none, for "local").
 function hasRequiredKeys() {
   if (getSttBackend() !== "local" && !process.env.DEEPGRAM_API_KEY) return false;
-  return getDetectorBackend() === "local" || Boolean(process.env.ANTHROPIC_API_KEY);
+  const detectorKey = requiredDetectorKeyEnv();
+  return detectorKey === null || Boolean(process.env[detectorKey]);
 }
 
 // Confidence threshold (lib/detection/validate.js): starts at this default and can
@@ -73,16 +126,18 @@ function getConfidenceThreshold() {
 }
 
 function setConfidenceThreshold(value) {
-  const merged = { ...readConfigFile(), confidenceThreshold: value };
-  fs.mkdirSync(CONFIG_DIR, { recursive: true });
-  fs.writeFileSync(CONFIG_PATH, JSON.stringify(merged, null, 2));
+  writeConfigFile({ confidenceThreshold: value });
 }
 
 module.exports = {
   loadConfig,
   saveConfig,
+  isKeyConfigured,
   hasRequiredKeys,
   getDetectorBackend,
+  setDetectorBackend,
+  requiredDetectorKeyEnv,
+  DETECTOR_BACKENDS,
   getSttBackend,
   getConfidenceThreshold,
   setConfidenceThreshold,

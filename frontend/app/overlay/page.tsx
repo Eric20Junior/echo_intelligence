@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useEffect, useState } from "react";
+import { Suspense, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { useEchoSocket } from "@/lib/useEchoSocket";
 import type { OverlayMessage } from "@/lib/types";
@@ -35,6 +35,13 @@ function OverlayContent() {
   const [faded, setFaded] = useState(false);
   const [everEnteredFullscreen, setEverEnteredFullscreen] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  // Auto-fit: the size classes below set the *maximum* font size, but a long passage
+  // (many verses) would grow taller than the screen and clip top/bottom. We measure the
+  // text's natural layout size against the viewport and scale it down just enough to fit,
+  // never up past the configured size. offsetWidth/offsetHeight are the untransformed
+  // layout box, so re-measuring after applying the transform stays stable (no feedback loop).
+  const contentRef = useRef<HTMLDivElement>(null);
+  const [fitScale, setFitScale] = useState(1);
 
   // Only auto_display/approved detections ever reach this page — `suggest`
   // status is queued for operator approval instead (see the operator page).
@@ -86,12 +93,51 @@ function OverlayContent() {
     document.documentElement.requestFullscreen().catch((err) => console.warn("fullscreen request failed:", err.message));
   }
 
+  // Recompute the fit whenever the passage, size, position, or window dimensions change.
+  // We compare the content's natural box to the available space and pick the largest
+  // scale ≤ 1 that fits both axes, with a small margin so text never kisses the edge.
+  // offsetWidth/offsetHeight report the *untransformed* layout box (CSS transforms don't
+  // affect them), so they're already the natural size regardless of the scale applied —
+  // the measurement is stable and there's no feedback loop. Runs via requestAnimationFrame
+  // so the DOM has laid out at the base font size before we measure.
+  useEffect(() => {
+    const el = contentRef.current;
+    if (!el) return;
+    let raf = 0;
+    function measure() {
+      const node = contentRef.current;
+      if (!node) return;
+      // Available space: transparent corner boxes are already width-capped by max-w-[36vw]
+      // and wrap their text, so height is the only real overflow axis there — constraining
+      // width against a shrink-wrapped parent would force a spurious shrink on short verses.
+      // Centered/fullscreen fits both axes against the viewport.
+      const margin = 0.94;
+      const availH = (transparent ? window.innerHeight * 0.9 : window.innerHeight) * margin;
+      const naturalH = node.offsetHeight;
+      const naturalW = node.offsetWidth;
+      if (naturalH === 0 || naturalW === 0) return;
+      const widthRatio = transparent ? 1 : (window.innerWidth * margin) / naturalW;
+      const next = Math.min(1, availH / naturalH, widthRatio);
+      // Round to avoid churn from sub-pixel jitter re-triggering a state update.
+      const rounded = Math.round(next * 1000) / 1000;
+      setFitScale((prev) => (Math.abs(prev - rounded) > 0.002 ? rounded : prev));
+    }
+    raf = requestAnimationFrame(measure);
+    window.addEventListener("resize", measure);
+    return () => {
+      cancelAnimationFrame(raf);
+      window.removeEventListener("resize", measure);
+    };
+  }, [current?.reference, current?.text, size, position, transparent]);
+
   const visible = current != null && !faded;
   const sizeClasses = SIZE_CLASSES[size];
 
   return (
     <div className={`font-serif text-neutral-100 ${transparent ? `fixed ${POSITION_CLASSES[position]}` : "flex h-screen items-center justify-center bg-black"}`}>
       <div
+        ref={contentRef}
+        style={{ transform: `scale(${fitScale})`, transformOrigin: "center" }}
         className={`max-w-[80vw] text-center transition-opacity duration-400 ${visible ? "opacity-100" : "opacity-0"} ${
           transparent ? "max-w-[36vw] rounded-lg bg-black/60 px-6 py-4 shadow-lg backdrop-blur-sm" : ""
         }`}
