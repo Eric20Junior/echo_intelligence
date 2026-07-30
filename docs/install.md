@@ -6,7 +6,20 @@ Echo Intelligence displays the **King James Version (KJV)**, which is in the pub
 
 ## Installing
 
-Open a terminal and run the line for your OS. No Node.js, git, or anything else needs to be installed first — this downloads the latest prebuilt release (built by `.github/workflows/package.yml`; Windows and macOS builds have not yet been smoke-tested on real hardware — see `docs/roadmap.md`'s Phase 6 section) and unzips it to `~/echo-intelligence` (`%USERPROFILE%\echo-intelligence` on Windows).
+### Installer (Windows and macOS) — recommended
+
+Download from the [latest release](https://github.com/Eric20Junior/echo_intelligence/releases/latest), open it, and follow the prompts. No terminal, no Node.js, nothing else to install first.
+
+- **Windows**: `echo-intelligence-<version>-windows-setup.exe`. Installs per-user (no administrator password needed) and adds a Start menu and desktop shortcut. Installing again over an existing copy upgrades it in place.
+- **macOS**: `echo-intelligence-<version>-macos.dmg`. Open it and drag **Echo Intelligence** into your Applications folder.
+
+Both installers are unsigned, so the OS warns before it will open them — see [Known platform caveats](#known-platform-caveats) below for the exact click-through, which you only have to do once.
+
+Your settings and learned data live in `~/.echo-intelligence` (`%USERPROFILE%\.echo-intelligence` on Windows), outside the installed app — so upgrading or uninstalling never touches them.
+
+### One-line script (all three OSes)
+
+Open a terminal and run the line for your OS. No Node.js, git, or anything else needs to be installed first — this downloads the latest prebuilt release (built by `.github/workflows/package.yml`; Windows and macOS builds have not yet been smoke-tested on real hardware — see `docs/roadmap.md`'s Phase 6 section) and unzips it to `~/echo-intelligence` (`%USERPROFILE%\echo-intelligence` on Windows). This is the only option on Linux.
 
 **macOS/Linux** (Terminal):
 ```
@@ -22,7 +35,9 @@ Prefer to do it by hand instead? Download the `echo-intelligence-<your-os>.zip` 
 
 ## First run
 
-1. Open the `bin` folder inside where it was installed, and run `echo-intelligence` (double-click on Windows/macOS, or `./echo-intelligence` in a terminal on Linux).
+1. Start it:
+   - **Installed with the installer** — use the **Echo Intelligence** shortcut (Windows: Start menu or desktop; macOS: Applications folder or Launchpad). A terminal window opens and stays open while the app runs; closing that window is how you stop the app.
+   - **Installed with the one-line script** — open the `bin` folder inside where it was installed and run `echo-intelligence` (double-click on Windows/macOS, or `./echo-intelligence` in a terminal on Linux).
 2. The first time it runs, a page opens asking for an API key:
    - **Deepgram** (for speech-to-text) — get one free at [console.deepgram.com](https://console.deepgram.com)
 3. Enter it, click **Save and continue**, then close that window and run `echo-intelligence` again — it remembers your key from now on (saved to a config file in your user profile, not inside the app folder).
@@ -53,6 +68,6 @@ That local fallback needs a CPU from roughly 2013 or later (specifically, one wi
 
 ## Known platform caveats
 
-- **macOS**: the app isn't code-signed with an Apple Developer certificate, so Gatekeeper will likely refuse to open it or show an "unidentified developer" warning. Right-click the executable and choose "Open" to bypass this once. (A signed/notarized build is future work — it requires an Apple Developer account, which this project doesn't currently have.)
-- **Windows**: requires **Windows 10 or later** — the app is packaged as a Node 22 single-executable, and Node.js itself has required Windows 10+ since Node 12, so it won't run (and `install.ps1` won't even complete) on Windows 7/8.1. It's also unsigned — Windows SmartScreen may warn before running it. Click "More info" → "Run anyway."
+- **macOS**: nothing here is code-signed with an Apple Developer certificate, so Gatekeeper refuses the first launch. **Right-click** (or Control-click) **Echo Intelligence** in Applications, choose **Open**, then **Open** again in the dialog — once, ever. Plain double-clicking the first time shows a dead-end "cannot be opened" or "damaged" message with no Open button, because a file downloaded in a browser also carries a quarantine flag; the right-click path clears it. macOS 15+ instead sends you to **System Settings → Privacy & Security**, where an **Open Anyway** button appears after the failed attempt. Also expect a microphone prompt on first listen that says *Terminal* wants access rather than Echo Intelligence — that's how macOS attributes the request for a terminal-launched app; allow it. (A signed/notarized build is future work — it requires a paid Apple Developer account, which this project doesn't currently have.)
+- **Windows**: requires **Windows 10 or later** — the app is packaged as a Node 22 single-executable, and Node.js itself has required Windows 10+ since Node 12, so it won't run (and `install.ps1` won't even complete) on Windows 7/8.1. It's also unsigned, so SmartScreen shows a blue "Windows protected your PC" screen for the installer: click **More info** → **Run anyway**. The installer itself needs no administrator password — it installs for the current user only.
 - **Linux**: no special caveats found in testing; if microphone capture fails, confirm `ffmpeg` is installed system-wide (`ffmpeg -version`) — the app falls back to a bundled copy if not, but the system one is preferred since it's more reliably built against this machine's actual audio library layout (see `docs/roadmap.md`'s Phase 6 notes for why).

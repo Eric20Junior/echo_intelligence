@@ -9,7 +9,10 @@
 #
 # Pushing a tag matching v* additionally zips each OS's dist/ folder and
 # publishes them to a GitHub Release named after the tag — that's what the
-# one-line install.sh/install.ps1 scripts (docs/install.md) download.
+# one-line install.sh/install.ps1 scripts (docs/install.md) download. Windows
+# and macOS also publish a native installer (.exe / .dmg) built from the same
+# dist/ tree — that's what a download page's button links to, since a zip
+# creates no shortcuts and leaves the operator in a file manager.
 name: package
 
 on:
@@ -83,10 +86,37 @@ jobs:
         shell: bash
         run: test -f dist/bin/ffmpeg || test -f dist/bin/ffmpeg.exe
 
+      # ISCC.exe is NOT on the windows-latest image (the runner docs list no Inno
+      # Setup at all), so install it before building the installer.
+      - name: Install Inno Setup
+        if: matrix.name == 'windows'
+        run: choco install innosetup --no-progress -y
+
+      # Native installers, one format per OS. Deliberately after the zip payload
+      # already exists and is asserted: a failure here costs the installer, never
+      # the dist/ artifact that already worked. Linux has none yet (.AppImage is
+      # still future work) so it just skips.
+      - name: Build installer
+        if: matrix.name != 'linux'
+        run: npm run installer:${{ matrix.name }}
+
+      # Same reasoning as the ffmpeg assertion above — an installer that silently
+      # didn't get produced must not pass as a green build.
+      - name: Verify installer exists
+        if: matrix.name != 'linux'
+        shell: bash
+        run: ls -lh installer-out/ && test -n "$(ls -A installer-out/)"
+
       - uses: actions/upload-artifact@v4
         with:
           name: echo-intelligence-${{ matrix.name }}
           path: backend/dist/
+
+      - uses: actions/upload-artifact@v4
+        if: matrix.name != 'linux'
+        with:
+          name: echo-intelligence-installer-${{ matrix.name }}
+          path: backend/installer-out/
 
       - name: Zip release asset
         if: startsWith(github.ref, 'refs/tags/v')
@@ -103,6 +133,12 @@ jobs:
         if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
         with:
-          files: echo-intelligence-${{ matrix.name }}.zip
+          # The zip is what install.sh/install.ps1 download; the installer is what
+          # the download page's button points at. Both ship on every tag. The
+          # installer glob matches nothing on Linux, which action-gh-release only
+          # warns about (fail_on_unmatched_files defaults to false).
+          files: |
+            echo-intelligence-${{ matrix.name }}.zip
+            backend/installer-out/*
           draft: false
           prerelease: false

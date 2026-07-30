@@ -34,6 +34,15 @@ mic → speech-to-text → reference detection → operator confirm/reject → p
 
 No Node.js, git, or anything else needs to be installed first.
 
+**Windows / macOS — download an installer** from the [latest release](https://github.com/Eric20Junior/echo_intelligence/releases/latest):
+
+- `echo-intelligence-<version>-windows-setup.exe` — installs per-user (no admin password) with Start menu and desktop shortcuts.
+- `echo-intelligence-<version>-macos.dmg` — drag **Echo Intelligence** to Applications.
+
+Both are unsigned, so the first launch needs one click-through: on macOS right-click → **Open**, on Windows **More info** → **Run anyway**. Details in [docs/install.md](docs/install.md#known-platform-caveats).
+
+Or install from a terminal instead (the only option on Linux):
+
 **macOS/Linux:**
 ```bash
 curl -fsSL https://raw.githubusercontent.com/Eric20Junior/echo_intelligence/main/install.sh | bash
@@ -53,10 +62,10 @@ tagged release.
 
 ### Updating
 
-Re-run the same one-line install command above — it always downloads the
-latest release and overwrites the previous install in place. Your settings
-(`~/.echo-intelligence/config.json`) and learned data (`data/log.db`) are
-untouched. To hear about new releases, click **Watch → Custom →
+Download and run the newer installer, or re-run the same one-line install
+command above — either way it replaces the previous install in place. Your
+settings (`~/.echo-intelligence/config.json`) and learned data (`data/log.db`)
+are untouched. To hear about new releases, click **Watch → Custom →
 Releases** on the [GitHub repo](https://github.com/Eric20Junior/echo_intelligence),
 or check the [releases page](https://github.com/Eric20Junior/echo_intelligence/releases)
 for what's new in each version.

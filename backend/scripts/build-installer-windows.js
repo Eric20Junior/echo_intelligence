@@ -5,8 +5,9 @@
 // straight from dist/, so a failure here can't cost us the artifact that already
 // worked.
 //
-// Requires Inno Setup's compiler (ISCC.exe), which is preinstalled on GitHub's
-// windows-latest runners. Locally: `winget install JRSoftware.InnoSetup`.
+// Requires Inno Setup's compiler (ISCC.exe), which is NOT on GitHub's
+// windows-latest image — .github/workflows/package.yml installs it with
+// `choco install innosetup` first. Locally: `winget install JRSoftware.InnoSetup`.
 const { execFileSync } = require("child_process");
 const fs = require("fs");
 const path = require("path");
