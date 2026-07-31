@@ -11,8 +11,9 @@ mic → speech-to-text → reference detection → operator confirm/reject → p
 ## Features
 
 - **Offline-first detection**: a regex pass handles ~85–90% of spoken references
-  instantly, with an on-device LLM fallback (Qwen2.5, via `node-llama-cpp`) for
-  STT-garbled cases — no account or API key required by default.
+  instantly and fully offline, with an LLM fallback for STT-garbled cases. The
+  fallback backend is an operator choice on first run — Claude, Gemini (free
+  tier), or an on-device Qwen2.5 that needs no account or internet at all.
 - **Reading mode**: once a book/chapter is confirmed, bare follow-ups like "next
   verse" or "chapter 5" resolve against it without needing a full reference each
   time.
@@ -114,8 +115,9 @@ Useful environment variables (backend `.env`, see `backend/lib/config.js`):
 |---|---|---|---|
 | `DEEPGRAM_API_KEY` | — | — | Required unless `STT_BACKEND=local` |
 | `STT_BACKEND` | `deepgram` \| `local` | `deepgram` | Speech-to-text engine |
-| `DETECTOR_BACKEND` | `local` \| `anthropic` | `local` | Reference-extraction fallback (local Qwen2.5 vs. a rollback path to Claude Haiku — faster, but needs an API key and internet) |
+| `DETECTOR_BACKEND` | `anthropic` \| `gemini` \| `local` | `anthropic` | Reference-extraction fallback — Claude Haiku (paid), Gemini (free tier), or local Qwen2.5 (offline, slower). Overrides the operator's saved choice when set |
 | `ANTHROPIC_API_KEY` | — | — | Only needed if `DETECTOR_BACKEND=anthropic` |
+| `GEMINI_API_KEY` | — | — | Only needed if `DETECTOR_BACKEND=gemini` |
 
 Frontend (`frontend` `.env.local`):
 
@@ -130,10 +132,12 @@ cd backend
 npm run package
 ```
 
-Builds a standalone `backend/dist/` (executable + data + models + the built
-frontend). `.github/workflows/package.yml` runs this on Linux/Windows/macOS and,
-on a `v*` tag push, publishes zipped builds to a GitHub Release — the artifacts
-`install.sh`/`install.ps1` download.
+Builds a standalone `backend/dist/` (executable + data + the built frontend).
+The local LLM's ~470MB model is deliberately not bundled — it downloads to the
+operator's data folder on first use if they chose the local backend.
+`.github/workflows/package.yml` runs this on Linux/Windows/macOS and, on a `v*`
+tag push, publishes zipped builds plus the Windows and macOS installers to a
+GitHub Release — the artifacts `install.sh`/`install.ps1` download.
 
 ## Licensing
 

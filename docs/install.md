@@ -19,7 +19,7 @@ Your settings and learned data live in `~/.echo-intelligence` (`%USERPROFILE%\.e
 
 ### One-line script (all three OSes)
 
-Open a terminal and run the line for your OS. No Node.js, git, or anything else needs to be installed first — this downloads the latest prebuilt release (built by `.github/workflows/package.yml`; Windows and macOS builds have not yet been smoke-tested on real hardware — see `docs/roadmap.md`'s Phase 6 section) and unzips it to `~/echo-intelligence` (`%USERPROFILE%\echo-intelligence` on Windows). This is the only option on Linux.
+Open a terminal and run the line for your OS. No Node.js, git, or anything else needs to be installed first — this downloads the latest prebuilt release and unzips it to `~/echo-intelligence` (`%USERPROFILE%\echo-intelligence` on Windows). This is the only option on Linux.
 
 **macOS/Linux** (Terminal):
 ```
@@ -36,12 +36,13 @@ Prefer to do it by hand instead? Download the `echo-intelligence-<your-os>.zip` 
 ## First run
 
 1. Start it:
-   - **Installed with the installer** — use the **Echo Intelligence** shortcut (Windows: Start menu or desktop; macOS: Applications folder or Launchpad). A terminal window opens and stays open while the app runs; closing that window is how you stop the app.
+   - **Installed with the installer** — use the **Echo Intelligence** shortcut (Windows: Start menu or desktop; macOS: Applications folder or Launchpad). A terminal window opens and stays open while the app runs; closing that window is how you stop the app. If no shortcut appeared, open the folder it installed to and run `echo-intelligence` from inside `bin`.
    - **Installed with the one-line script** — open the `bin` folder inside where it was installed and run `echo-intelligence` (double-click on Windows/macOS, or `./echo-intelligence` in a terminal on Linux).
-2. The first time it runs, a page opens asking for an API key:
-   - **Deepgram** (for speech-to-text) — get one free at [console.deepgram.com](https://console.deepgram.com)
-3. Enter it, click **Save and continue**, then close that window and run `echo-intelligence` again — it remembers your key from now on (saved to a config file in your user profile, not inside the app folder).
-4. Open `http://localhost:8787/` in your browser — this is the operator control panel. Pick your microphone from the dropdown and click **Start Listening**.
+2. The first time it runs, a setup page opens in your browser by itself. It asks for two things:
+   - **Deepgram** (for speech-to-text) — get a key free at [console.deepgram.com](https://console.deepgram.com)
+   - **Scripture detection** — used only when the built-in word matching can't identify a spoken reference. Pick one: **Anthropic Claude** (most accurate; paid, roughly a cent per service), **Google Gemini** (free tier, no card required), or **On this computer** (no internet or key needed once set up, but downloads about 470MB the first time and is slow on older machines). Enter the key for whichever you pick.
+3. Click **Save and continue**. The app restarts itself and opens the operator control panel — you don't need to close anything or start it again. Your keys are remembered from now on (saved to a config file in your user profile, not inside the app folder).
+4. On the operator control panel, pick your microphone from the dropdown and click **Start Listening**.
 5. Open `http://localhost:8787/overlay` on the projector/screen the congregation sees, and click **Go Fullscreen**.
 
 ## Using the overlay in OBS (livestreaming)
@@ -60,14 +61,13 @@ If a source reconnects after a network hiccup, the verse fades out after a few s
 
 ## About the scripture-reference fallback
 
-Most spoken references are parsed instantly and fully offline by a built-in regex pass. For the minority that STT garbles too badly for that (an unclear book name, for instance), the app runs a small local AI model (Qwen2.5, bundled with the app) to fill in the gap — still fully offline, no account or API key needed.
+Most spoken references are parsed instantly and fully offline by a built-in regex pass. For the minority that STT garbles too badly for that (an unclear book name, for instance), the app falls back to whichever scripture-detection option you chose during setup.
 
-That local fallback needs a CPU from roughly 2013 or later (specifically, one with AVX2 support) to run at a usable speed. On older or very low-power hardware it can take up to a minute per fallback case — slow, but it still only affects the operator's confirm/reject queue for the rare STT-garbled utterance, not the regex path that handles most references instantly.
-
-(Developers comparing accuracy against the old cloud-based detector can set `DETECTOR_BACKEND=anthropic` and supply an Anthropic API key — this is a rollback/testing path, not something a normal install needs.)
+If you chose **On this computer**, that fallback runs a small AI model (Qwen2.5) locally — no internet or account needed, but it downloads about 470MB the first time it's used, and it needs a CPU from roughly 2013 or later (specifically, one with AVX2 support) to run at a usable speed. On older or very low-power hardware it can take up to a minute per fallback case — slow, but it still only affects the operator's confirm/reject queue for the rare STT-garbled utterance, not the regex path that handles most references instantly.
 
 ## Known platform caveats
 
 - **macOS**: nothing here is code-signed with an Apple Developer certificate, so Gatekeeper refuses the first launch. **Right-click** (or Control-click) **Echo Intelligence** in Applications, choose **Open**, then **Open** again in the dialog — once, ever. Plain double-clicking the first time shows a dead-end "cannot be opened" or "damaged" message with no Open button, because a file downloaded in a browser also carries a quarantine flag; the right-click path clears it. macOS 15+ instead sends you to **System Settings → Privacy & Security**, where an **Open Anyway** button appears after the failed attempt. Also expect a microphone prompt on first listen that says *Terminal* wants access rather than Echo Intelligence — that's how macOS attributes the request for a terminal-launched app; allow it. (A signed/notarized build is future work — it requires a paid Apple Developer account, which this project doesn't currently have.)
 - **Windows**: requires **Windows 10 or later** — the app is packaged as a Node 22 single-executable, and Node.js itself has required Windows 10+ since Node 12, so it won't run (and `install.ps1` won't even complete) on Windows 7/8.1. It's also unsigned, so SmartScreen shows a blue "Windows protected your PC" screen for the installer: click **More info** → **Run anyway**. The installer itself needs no administrator password — it installs for the current user only.
-- **Linux**: no special caveats found in testing; if microphone capture fails, confirm `ffmpeg` is installed system-wide (`ffmpeg -version`) — the app falls back to a bundled copy if not, but the system one is preferred since it's more reliably built against this machine's actual audio library layout (see `docs/roadmap.md`'s Phase 6 notes for why).
+- **Linux**: no special caveats found in testing; if microphone capture fails, confirm `ffmpeg` is installed system-wide (`ffmpeg -version`) — the app falls back to a bundled copy if not, but the system one is preferred since it's more reliably built against this machine's actual audio library layout.
+- **Shortcuts on Windows and macOS**: creating the desktop and Start menu shortcut is best-effort and hasn't been confirmed on real hardware yet. If none appears after installing, the app is still fine — open the folder it installed to and run `echo-intelligence` from inside `bin`.
