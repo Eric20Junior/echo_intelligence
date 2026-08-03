@@ -183,6 +183,8 @@ interface Props {
   onSelectDevice: (id: string) => void;
   deviceLocked: boolean;
   settings: OperatorSettings;
+  /** Gain the backend is applying right now — differs from settings.gain under auto gain. */
+  appliedGain: number;
   onUpdateSetting: (key: keyof OperatorSettings, value: boolean | number) => void;
   translations: TranslationsInfo;
   viewer: boolean;
@@ -199,6 +201,7 @@ export function SettingsModal({
   onSelectDevice,
   deviceLocked,
   settings,
+  appliedGain,
   onUpdateSetting,
   translations,
   viewer,
@@ -355,21 +358,52 @@ export function SettingsModal({
                   <p className="mt-1 text-xs text-text-3">Selected device persists across sessions.</p>
                 </div>
                 <div>
+                  <label className="flex items-start gap-2 text-sm text-text-1">
+                    <input
+                      type="checkbox"
+                      checked={settings.autoGain}
+                      disabled={viewer}
+                      onChange={(e) => onUpdateSetting("autoGain", e.target.checked)}
+                      className="mt-0.5"
+                    />
+                    <span>
+                      Adjust input volume automatically
+                      <span className="mt-0.5 block text-xs text-text-3">
+                        Listens to how loud the room actually is and sets the level for you. Leave this on unless you
+                        have a reason not to.
+                      </span>
+                    </span>
+                  </label>
+                  {settings.autoGain && appliedGain >= 8 && (
+                    <p className="mt-2 rounded-sm border border-border-2 bg-bg-1 p-2 text-xs text-text-3">
+                      Currently boosting by {Math.round(20 * Math.log10(appliedGain))} dB — the microphone is picking up
+                      very little. This still works, but moving the microphone closer to the speaker will transcribe
+                      more accurately than amplifying a faint signal.
+                    </p>
+                  )}
+                </div>
+                <div>
                   <div className="mb-1 flex items-center justify-between text-xs font-semibold uppercase tracking-caps text-text-3">
                     <span>Input gain</span>
-                    <span className="font-mono normal-case">{Math.round(settings.gain * 50)}%</span>
+                    <span className="font-mono normal-case">
+                      {settings.autoGain ? `auto · ${appliedGain.toFixed(1)}×` : `${settings.gain.toFixed(2)}×`}
+                    </span>
                   </div>
                   <input
                     type="range"
-                    min={0}
-                    max={2}
-                    step={0.05}
+                    min={0.25}
+                    max={32}
+                    step={0.25}
                     value={settings.gain}
-                    disabled={viewer}
+                    disabled={viewer || settings.autoGain}
                     onChange={(e) => onUpdateSetting("gain", Number(e.target.value))}
-                    className="w-full"
+                    className="w-full disabled:opacity-40"
                   />
-                  <p className="mt-1 text-xs text-text-3">Amplifies the incoming audio signal before transcription. 50% is unity gain.</p>
+                  <p className="mt-1 text-xs text-text-3">
+                    {settings.autoGain
+                      ? "Set automatically. Turn off the checkbox above to control it by hand."
+                      : "Amplifies the incoming audio signal before transcription. 1× passes it through unchanged."}
+                  </p>
                 </div>
               </div>
             )}

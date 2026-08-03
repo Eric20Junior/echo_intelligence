@@ -9,7 +9,8 @@ const { resolveVerseText } = require("../detection/resolve");
 const presentation = require("./presentation");
 const readingMode = require("../detection/reading-mode");
 const { formatReference } = require("../format");
-const { rmsLevel } = require("../capture/audio-level");
+const { rmsLevel, meterScale } = require("../capture/audio-level");
+const { createAutoGain } = require("../capture/auto-gain");
 const { applyGain } = require("../capture/gain");
 
 const LEVEL_BROADCAST_INTERVAL_MS = 100; // ~10Hz, matches the meter's visual refresh needs
@@ -118,18 +119,33 @@ async function start({ device }) {
 
   let lastLevelBroadcast = 0;
   let receivedAnyChunk = false;
+  const autoGain = createAutoGain();
   const mic = await micSource.start({
     device,
     onChunk: (rawChunk) => {
       receivedAnyChunk = true;
-      const chunk = applyGain(rawChunk, presentation.getSettings().gain);
+      const { gain, autoGain: autoGainEnabled } = presentation.getSettings();
+      // Auto mode measures the *raw* input, before any scaling, so the
+      // multiplier it computes is a property of the room and mic rather than of
+      // its own previous output (feeding it post-gain audio makes it chase its
+      // own tail and settle wherever it started).
+      const appliedGain = autoGainEnabled ? autoGain.update(rawChunk) : gain;
+      const chunk = applyGain(rawChunk, appliedGain);
       // Reads active.stt (not a captured local) so a reconnect mid-session
       // (see connectStt's onClose above) swaps in the new socket transparently.
       active?.stt.sendAudio(chunk);
       const now = Date.now();
       if (now - lastLevelBroadcast >= LEVEL_BROADCAST_INTERVAL_MS) {
         lastLevelBroadcast = now;
-        presentation.emitAudioLevel(rmsLevel(chunk));
+        // Post-gain level, so the meter shows what Deepgram actually receives —
+        // that's the number that explains a missing transcript. rawLevel rides
+        // along to separate "the mic hears nothing" from "the mic is quiet and
+        // auto-gain is compensating", which look identical on the meter alone.
+        presentation.emitAudioLevel(meterScale(rmsLevel(chunk)), {
+          rawLevel: meterScale(rmsLevel(rawChunk)),
+          gain: appliedGain,
+          auto: autoGainEnabled,
+        });
       }
     },
     onError: (err) => {

@@ -1,7 +1,12 @@
 import * as React from "react";
 
 export interface AudioMeterProps {
-  /** 0–1 current input level. */
+  /**
+   * 0–1 meter position, already dBFS-scaled by the backend (see
+   * backend/lib/capture/audio-level.js meterScale) — NOT raw RMS amplitude.
+   * Speech at a healthy working level lands around the middle of the range;
+   * feeding raw RMS in here instead lights one bar for perfectly good audio.
+   */
   level: number;
   active?: boolean;
   bars?: number;

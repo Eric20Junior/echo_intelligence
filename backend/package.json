@@ -1,12 +1,12 @@
 {
   "name": "echo-intelligence",
-  "version": "1.3.0",
+  "version": "1.4.0",
   "main": "index.js",
   "directories": {
     "doc": "docs"
   },
   "scripts": {
-    "test": "node test/run.js && node test/reading-mode-run.js",
+    "test": "node test/run.js && node test/reading-mode-run.js && node test/auto-gain-run.js",
     "live": "node scripts/live-demo.js",
     "package": "node scripts/build-verse-db.js && node scripts/package.js",
     "installer:windows": "node scripts/build-installer-windows.js",

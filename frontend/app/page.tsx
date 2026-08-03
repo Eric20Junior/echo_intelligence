@@ -14,7 +14,7 @@ import { FeedItem } from "@/components/ui/FeedItem";
 import { ToastStack, useToasts } from "@/components/ui/Toast";
 import { SettingsModal } from "@/components/ui/SettingsModal";
 
-const DEFAULT_SETTINGS: OperatorSettings = { confirmAll: false, collapseRepeats: true, gain: 1 };
+const DEFAULT_SETTINGS: OperatorSettings = { confirmAll: false, collapseRepeats: true, gain: 1, autoGain: true };
 const DEFAULT_TRANSLATIONS: TranslationsInfo = { current: "KJV", options: [{ id: "KJV", label: "King James Version", available: true }] };
 
 // The projector's own VerseDisplay sizes itself off the real browser viewport
@@ -46,6 +46,11 @@ export default function OperatorPage() {
   const [manualRef, setManualRef] = useState("");
   const [section, setSectionState] = useState<ServiceSection>("sermon");
   const [audioLevel, setAudioLevel] = useState(0);
+  // Gain the backend is actually applying right now. Under auto gain this is the
+  // only visible evidence the AGC is working, so it's surfaced rather than kept
+  // server-side: a high number is the app telling the operator "your mic is very
+  // quiet and I'm compensating", which is a room problem worth fixing at source.
+  const [appliedGain, setAppliedGain] = useState(1);
   const [viewer, setViewer] = useState(false);
   const [translations, setTranslations] = useState<TranslationsInfo>(DEFAULT_TRANSLATIONS);
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -83,6 +88,7 @@ export default function OperatorPage() {
       setSectionState(msg.value);
     } else if (msg.type === "audio_level") {
       setAudioLevel(msg.level);
+      if (typeof msg.gain === "number") setAppliedGain(msg.gain);
     } else if (msg.type === "transcript") {
       setTranscript((prev) => [...prev.slice(-19), msg.text]);
     } else if (msg.type === "lock") {
@@ -265,6 +271,11 @@ export default function OperatorPage() {
           <LiveIndicator state={listeningState} />
           <span className="h-4 w-px bg-border-2" />
           <AudioMeter level={audioLevel} active={active} />
+          {active && settings.autoGain && appliedGain >= 2 && (
+            <span className="font-mono text-[10px] text-text-3" title="Auto gain is boosting a quiet input">
+              +{Math.round(20 * Math.log10(appliedGain))} dB
+            </span>
+          )}
         </div>
         <button
           onClick={() => setSettingsOpen(true)}
@@ -416,6 +427,7 @@ export default function OperatorPage() {
         onSelectDevice={setSelectedDevice}
         deviceLocked={active}
         settings={settings}
+        appliedGain={appliedGain}
         onUpdateSetting={updateSetting}
         translations={translations}
         viewer={viewer}

@@ -99,6 +99,17 @@ function listDevicesLinux() {
   });
 }
 
+// Windows names its "capture what the speakers are playing" device differently
+// per audio driver, and it's the only way to feed system audio (a recorded
+// sermon, a Zoom feed, a video played on the same machine) straight into
+// transcription without a microphone in the loop at all. Operators don't know
+// to look for these names, so they get labelled in the dropdown instead.
+const LOOPBACK_PATTERNS = [/stereo mix/i, /what u hear/i, /wave out/i, /loopback/i, /virtual.?audio/i, /vb-?audio/i, /voicemeeter/i];
+
+function isLoopbackDevice(name) {
+  return LOOPBACK_PATTERNS.some((re) => re.test(name));
+}
+
 // ffmpeg -list_devices true -f dshow -i dummy writes device names to stderr, e.g.:
 //   [dshow @ ...] "Microphone (Realtek Audio)" (audio)
 function listDevicesWindows() {
@@ -108,7 +119,8 @@ function listDevicesWindows() {
       const lineRe = /"([^"]+)"\s*\(audio\)/g;
       let match;
       while ((match = lineRe.exec(stderr || ""))) {
-        devices.push({ id: match[1], label: match[1] });
+        const name = match[1];
+        devices.push({ id: name, label: isLoopbackDevice(name) ? `${name} — plays computer audio` : name });
       }
       resolve(devices);
     });
@@ -169,6 +181,12 @@ async function resolveWindowsDevice(device) {
         '(e.g. "Stereo Mix") is enabled in Sound settings',
     );
   }
+  // "System default" on Windows means "whatever dshow enumerated first", which
+  // is not necessarily the device the operator assumed — a laptop with a webcam
+  // plugged in often enumerates the webcam's mic ahead of the built-in one.
+  // Logged by name so a wrong-device session is diagnosable from the console
+  // rather than looking identical to a mic that simply isn't hearing anything.
+  console.log(`capture: dshow "default" resolved to "${devices[0].id}"`);
   return devices[0].id;
 }
 
@@ -208,4 +226,4 @@ async function start({ device, onChunk, onError }) {
   return { stop: () => ffmpeg.kill() };
 }
 
-module.exports = { listDevices, start, checkFfmpeg, SAMPLE_RATE };
+module.exports = { listDevices, start, checkFfmpeg, isLoopbackDevice, SAMPLE_RATE };

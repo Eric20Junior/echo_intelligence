@@ -33,6 +33,7 @@ const settings = {
   confirmAll: false, // force every detection through the operator queue, even high-confidence ones
   collapseRepeats: true, // re-detections of the same reference bump an existing pending card instead of adding a new one
   gain: 1, // input gain multiplier applied to the mic PCM (Settings > Audio), see lib/gain.js
+  autoGain: true, // when set, lib/capture/auto-gain.js picks the multiplier per chunk and `gain` above is ignored
 };
 
 let broadcastFn = () => {};
@@ -201,8 +202,8 @@ function manualDisplay(candidate, rawInput, text, decision = "manual") {
 
 // Mic input level meter (roadmap Phase 8 step 4) — purely transient, so this
 // just forwards to the operator's WS, nothing to log or snapshot.
-function emitAudioLevel(level) {
-  broadcastFn("operator", { type: "audio_level", level });
+function emitAudioLevel(level, meta = {}) {
+  broadcastFn("operator", { type: "audio_level", level, ...meta });
 }
 
 // Live transcript (roadmap: landing page redesign) — every STT utterance,

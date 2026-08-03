@@ -29,6 +29,7 @@ export interface OperatorSettings {
   confirmAll: boolean;
   collapseRepeats: boolean;
   gain: number;
+  autoGain: boolean;
 }
 
 export type ServiceSection = "worship" | "sermon" | "response";
@@ -63,9 +64,9 @@ export type OperatorMessage =
   | { type: "auto_display"; entry: OverlayMessage }
   | { type: "suggestion_added"; entry: SuggestionEntry }
   | { type: "suggestion_resolved"; id: string; action: "approved" | "rejected" }
-  | { type: "setting_updated"; key: keyof OperatorSettings; value: boolean }
+  | { type: "setting_updated"; key: keyof OperatorSettings; value: boolean | number }
   | { type: "section_updated"; value: ServiceSection }
-  | { type: "audio_level"; level: number }
+  | { type: "audio_level"; level: number; rawLevel?: number; gain?: number; auto?: boolean }
   | { type: "transcript"; text: string }
   | { type: "lock"; role: "control" | "viewer" }
   | { type: "mic_error"; message: string; canOpenSettings: boolean };
